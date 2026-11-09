@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Operational backend audit snapshots stay local.
+/docs/backend-audit-*.json

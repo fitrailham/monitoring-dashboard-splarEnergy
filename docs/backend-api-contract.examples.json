@@ -1,0 +1,957 @@
+{
+  "notice": "USULAN KONTRAK. Semua respons adalah fixture ilustratif, bukan data produksi atau hasil audit. Audit operasional tersimpan lokal dan tidak didistribusikan dalam repository public. GET tidak memakai request body. Kontrak belum diterapkan otomatis pada backend maupun frontend.",
+  "version": "proposal-1",
+  "base_url": "http://127.0.0.1:8000",
+  "endpoints": {
+    "plants": {
+      "method": "GET",
+      "path": "/api/database/plants",
+      "status": 200,
+      "response": {
+        "success": true,
+        "total": 1,
+        "data": [
+          {
+            "plant_code": "PLANT-DEMO-001",
+            "plant_name": "PLTS Contoh",
+            "is_demo": true,
+            "country_code": "ID",
+            "country_name": "Indonesia",
+            "region": "DKI Jakarta",
+            "city": "Jakarta",
+            "time_zone": "Asia/Jakarta",
+            "address": "Alamat contoh untuk dokumentasi",
+            "latitude": -6.2,
+            "longitude": 106.8167,
+            "location_source": "verified_device",
+            "location_verified": true,
+            "image_url": null,
+            "grid_connected_on": "2026-01-01",
+            "capacity_kwp": 100,
+            "inverter_rated_power_kw": 80,
+            "ess_rated_capacity_kwh": 200,
+            "optimizer_quantity": 0,
+            "has_pv": true,
+            "has_ess": true,
+            "device_types": [
+              "inverter",
+              "ess",
+              "meter"
+            ],
+            "device_serial_numbers": [
+              "SN-DEMO-001",
+              "SN-DEMO-002",
+              "SN-DEMO-003"
+            ],
+            "device_count": 3
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false
+        }
+      }
+    },
+    "plant_detail": {
+      "method": "GET",
+      "path": "/api/database/plants/PLANT-DEMO-001",
+      "status": 200,
+      "response": {
+        "success": true,
+        "data": {
+          "plant_code": "PLANT-DEMO-001",
+          "plant_name": "PLTS Contoh",
+          "is_demo": true,
+          "country_code": "ID",
+          "country_name": "Indonesia",
+          "region": "DKI Jakarta",
+          "city": "Jakarta",
+          "time_zone": "Asia/Jakarta",
+          "address": "Alamat contoh untuk dokumentasi",
+          "latitude": -6.2,
+          "longitude": 106.8167,
+          "location_source": "verified_device",
+          "location_verified": true,
+          "image_url": null,
+          "grid_connected_on": "2026-01-01",
+          "capacity_kwp": 100,
+          "inverter_rated_power_kw": 80,
+          "ess_rated_capacity_kwh": 200,
+          "optimizer_quantity": 0,
+          "has_pv": true,
+          "has_ess": true,
+          "device_types": [
+            "inverter",
+            "ess",
+            "meter"
+          ],
+          "device_serial_numbers": [
+            "SN-DEMO-001",
+            "SN-DEMO-002",
+            "SN-DEMO-003"
+          ],
+          "device_count": 3
+        },
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false
+        }
+      }
+    },
+    "overview": {
+      "method": "GET",
+      "path": "/api/database/overview",
+      "query": {
+        "page": 1,
+        "page_size": 10,
+        "search": "Contoh",
+        "country_code": "ID",
+        "device_type": "ess",
+        "device_sn": "SN-DEMO-001",
+        "status": "normal",
+        "sort": "yield_today_kwh",
+        "order": "desc"
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "source": "example",
+        "total": 1,
+        "data": [
+          {
+            "plant_code": "PLANT-DEMO-001",
+            "plant_name": "PLTS Contoh",
+            "is_demo": true,
+            "country_code": "ID",
+            "country_name": "Indonesia",
+            "region": "DKI Jakarta",
+            "city": "Jakarta",
+            "time_zone": "Asia/Jakarta",
+            "address": "Alamat contoh untuk dokumentasi",
+            "latitude": -6.2,
+            "longitude": 106.8167,
+            "location_source": "verified_device",
+            "location_verified": true,
+            "image_url": null,
+            "grid_connected_on": "2026-01-01",
+            "capacity_kwp": 100,
+            "inverter_rated_power_kw": 80,
+            "ess_rated_capacity_kwh": 200,
+            "optimizer_quantity": 0,
+            "has_pv": true,
+            "has_ess": true,
+            "device_types": [
+              "inverter",
+              "ess",
+              "meter"
+            ],
+            "device_serial_numbers": [
+              "SN-DEMO-001",
+              "SN-DEMO-002",
+              "SN-DEMO-003"
+            ],
+            "device_count": 3,
+            "status": "normal",
+            "status_source": "device_health",
+            "status_reason": "Device reports healthy and communication is current",
+            "last_seen_at": "2026-11-09T08:55:00Z",
+            "recorded_at": "2026-11-09T08:56:00Z",
+            "pv_power_kw": 75,
+            "load_power_kw": 90,
+            "grid_power_kw": 10,
+            "battery_power_kw": 5,
+            "battery_soc_percent": 65,
+            "yield_today_kwh": 500,
+            "total_yield_kwh": 123456.7,
+            "ess_charge_today_kwh": 100,
+            "ess_discharge_today_kwh": 80,
+            "specific_energy_kwh_per_kwp": 5,
+            "performance_ratio_percent": 83.3333333333,
+            "poa_irradiation_today_kwh_m2": 6,
+            "revenue_today_idr": 725000,
+            "data_source": "example",
+            "timestamp_source": "measurement",
+            "data_quality": {
+              "state": "fresh",
+              "measured_at": "2026-11-09T08:55:00Z",
+              "collected_at": "2026-11-09T08:56:00Z",
+              "measurement_time_verified": true,
+              "age_seconds": 300,
+              "stale_after_seconds": 900,
+              "expected_interval_seconds": 300,
+              "missing_fields": [],
+              "not_applicable_fields": []
+            }
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio_filtered",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false,
+          "page": 1,
+          "page_size": 10,
+          "returned": 1,
+          "total_pages": 1,
+          "filters_applied": {
+            "search": "Contoh",
+            "country_code": "ID",
+            "device_type": "ess",
+            "device_sn": "SN-DEMO-001",
+            "status": "normal"
+          },
+          "coverage": {
+            "pv_power_kw": {
+              "expected_plants": 1,
+              "valid_plants": 1,
+              "missing_plants": 0,
+              "stale_plants": 0,
+              "unverified_plants": 0,
+              "not_applicable_plants": 0,
+              "complete": true
+            },
+            "capacity_kwp": {
+              "expected_plants": 1,
+              "valid_plants": 1,
+              "missing_plants": 0,
+              "stale_plants": 0,
+              "unverified_plants": 0,
+              "not_applicable_plants": 0,
+              "complete": true
+            }
+          }
+        }
+      }
+    },
+    "portfolio_summary": {
+      "method": "GET",
+      "path": "/api/portfolio/summary",
+      "query": {
+        "date": "2026-11-09",
+        "time_zone": "Asia/Jakarta"
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "data": {
+          "total_plants": 1,
+          "kpis": {
+            "current_power_kw": 75,
+            "yield_today_kwh": 500,
+            "total_yield_kwh": 123456.7,
+            "installed_pv_capacity_kwp": 100,
+            "inverter_rated_power_kw": 80,
+            "ess_rated_capacity_kwh": 200,
+            "revenue_today_idr": 725000,
+            "currency": "IDR"
+          },
+          "plant_status": {
+            "normal": 1,
+            "faulty": 0,
+            "disconnected": 0,
+            "unknown": 0
+          },
+          "active_alarms": {
+            "configured": true,
+            "total": 0,
+            "critical": 0,
+            "major": 0,
+            "minor": 0,
+            "warning": 0,
+            "unclassified": 0,
+            "configured_plants": 1,
+            "unconfigured_plants": 0,
+            "failed_plants": 0,
+            "complete": true
+          },
+          "environmental_benefits": {
+            "status": "unconfigured",
+            "period": "lifetime",
+            "eligible_energy_kwh": null,
+            "co2_avoided_kg": null,
+            "standard_coal_saved_kg": null,
+            "equivalent_tree_years": null,
+            "factor_set_id": null,
+            "factor_source": null,
+            "factor_version": null,
+            "reason": "Approved environmental conversion factors have not been configured"
+          },
+          "revenue": {
+            "status": "configured",
+            "period": "day",
+            "currency": "IDR",
+            "self_consumption_savings_idr": 675000,
+            "export_revenue_idr": 50000,
+            "revenue_today_idr": 725000,
+            "basis": "self_consumption_savings_plus_export",
+            "tariff_version": "EXAMPLE_ONLY",
+            "is_estimate": true
+          },
+          "coverage": {
+            "pv_power_kw": {
+              "expected_plants": 1,
+              "valid_plants": 1,
+              "missing_plants": 0,
+              "stale_plants": 0,
+              "unverified_plants": 0,
+              "not_applicable_plants": 0,
+              "complete": true
+            },
+            "capacity_kwp": {
+              "expected_plants": 1,
+              "valid_plants": 1,
+              "missing_plants": 0,
+              "stale_plants": 0,
+              "unverified_plants": 0,
+              "not_applicable_plants": 0,
+              "complete": true
+            }
+          }
+        },
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false
+        }
+      }
+    },
+    "yield_statistics": {
+      "method": "GET",
+      "path": "/api/database/yield-statistics",
+      "query": {
+        "plant_code": "PLANT-DEMO-001",
+        "from": "2026-11-07T17:00:00Z",
+        "to": "2026-11-08T17:00:00Z",
+        "grain": "hour",
+        "time_zone": "Asia/Jakarta"
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "data": {
+          "scope": "plant",
+          "plant_code": "PLANT-DEMO-001",
+          "from": "2026-11-07T17:00:00Z",
+          "to": "2026-11-08T17:00:00Z",
+          "grain": "hour",
+          "time_zone": "Asia/Jakarta",
+          "metric": "pv_generation_energy",
+          "unit": "kWh",
+          "aggregation": "interval_energy",
+          "total_yield_kwh": 500,
+          "complete": false,
+          "buckets": [
+            {
+              "start_at": "2026-11-07T17:00:00.000Z",
+              "end_at": "2026-11-07T18:00:00.000Z",
+              "label": "00:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-07T18:00:00.000Z",
+              "end_at": "2026-11-07T19:00:00.000Z",
+              "label": "01:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-07T19:00:00.000Z",
+              "end_at": "2026-11-07T20:00:00.000Z",
+              "label": "02:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-07T20:00:00.000Z",
+              "end_at": "2026-11-07T21:00:00.000Z",
+              "label": "03:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-07T21:00:00.000Z",
+              "end_at": "2026-11-07T22:00:00.000Z",
+              "label": "04:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-07T22:00:00.000Z",
+              "end_at": "2026-11-07T23:00:00.000Z",
+              "label": "05:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-07T23:00:00.000Z",
+              "end_at": "2026-11-08T00:00:00.000Z",
+              "label": "06:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T00:00:00.000Z",
+              "end_at": "2026-11-08T01:00:00.000Z",
+              "label": "07:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T01:00:00.000Z",
+              "end_at": "2026-11-08T02:00:00.000Z",
+              "label": "08:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T02:00:00.000Z",
+              "end_at": "2026-11-08T03:00:00.000Z",
+              "label": "09:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T03:00:00.000Z",
+              "end_at": "2026-11-08T04:00:00.000Z",
+              "label": "10:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T04:00:00.000Z",
+              "end_at": "2026-11-08T05:00:00.000Z",
+              "label": "11:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T05:00:00.000Z",
+              "end_at": "2026-11-08T06:00:00.000Z",
+              "label": "12:00",
+              "yield_kwh": 200,
+              "quality": "measured",
+              "received_samples": 12,
+              "expected_samples": 12,
+              "reason": null
+            },
+            {
+              "start_at": "2026-11-08T06:00:00.000Z",
+              "end_at": "2026-11-08T07:00:00.000Z",
+              "label": "13:00",
+              "yield_kwh": 300,
+              "quality": "measured",
+              "received_samples": 12,
+              "expected_samples": 12,
+              "reason": null
+            },
+            {
+              "start_at": "2026-11-08T07:00:00.000Z",
+              "end_at": "2026-11-08T08:00:00.000Z",
+              "label": "14:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T08:00:00.000Z",
+              "end_at": "2026-11-08T09:00:00.000Z",
+              "label": "15:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T09:00:00.000Z",
+              "end_at": "2026-11-08T10:00:00.000Z",
+              "label": "16:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T10:00:00.000Z",
+              "end_at": "2026-11-08T11:00:00.000Z",
+              "label": "17:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T11:00:00.000Z",
+              "end_at": "2026-11-08T12:00:00.000Z",
+              "label": "18:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T12:00:00.000Z",
+              "end_at": "2026-11-08T13:00:00.000Z",
+              "label": "19:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T13:00:00.000Z",
+              "end_at": "2026-11-08T14:00:00.000Z",
+              "label": "20:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T14:00:00.000Z",
+              "end_at": "2026-11-08T15:00:00.000Z",
+              "label": "21:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T15:00:00.000Z",
+              "end_at": "2026-11-08T16:00:00.000Z",
+              "label": "22:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            },
+            {
+              "start_at": "2026-11-08T16:00:00.000Z",
+              "end_at": "2026-11-08T17:00:00.000Z",
+              "label": "23:00",
+              "yield_kwh": null,
+              "quality": "missing",
+              "received_samples": 0,
+              "expected_samples": 12,
+              "reason": "NO_MEASUREMENTS"
+            }
+          ]
+        },
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": true,
+          "coverage": {
+            "expected_buckets": 24,
+            "complete_buckets": 2,
+            "partial_buckets": 0,
+            "missing_buckets": 22
+          }
+        }
+      }
+    },
+    "rankings": {
+      "method": "GET",
+      "path": "/api/database/rankings",
+      "query": {
+        "date": "2026-11-09",
+        "metric": "specific_energy",
+        "limit": 5,
+        "time_zone": "Asia/Jakarta"
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "data": [
+          {
+            "rank": 1,
+            "plant_code": "PLANT-DEMO-001",
+            "plant_name": "PLTS Contoh",
+            "yield_kwh": 500,
+            "capacity_kwp": 100,
+            "specific_energy_kwh_per_kwp": 5,
+            "quality": "fresh"
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false,
+          "ranking_date": "2026-11-09",
+          "eligible_plants": 1,
+          "excluded_plants": 0,
+          "excluded_reasons": {
+            "missing_capacity": 0,
+            "missing_yield": 0,
+            "stale_data": 0
+          }
+        }
+      }
+    },
+    "devices": {
+      "method": "GET",
+      "path": "/api/devices/PLANT-DEMO-001",
+      "status": 200,
+      "response": {
+        "success": true,
+        "plant_code": "PLANT-DEMO-001",
+        "collected_at": "2026-11-09T08:56:00Z",
+        "total": 3,
+        "data": [
+          {
+            "device_id": "DEVICE-DEMO-001",
+            "device_sn": "SN-DEMO-001",
+            "device_name": "Inverter Contoh",
+            "device_type": "inverter",
+            "model": "EXAMPLE-MODEL",
+            "vendor_device_type_id": 1,
+            "rated_ac_power_kw": 80,
+            "rated_energy_kwh": null,
+            "optimizer_quantity": 0,
+            "latitude": -6.2,
+            "longitude": 106.8167,
+            "status": "normal",
+            "last_seen_at": "2026-11-09T08:55:00Z"
+          },
+          {
+            "device_id": "DEVICE-DEMO-002",
+            "device_sn": "SN-DEMO-002",
+            "device_name": "ESS Contoh",
+            "device_type": "ess",
+            "model": "EXAMPLE-MODEL",
+            "vendor_device_type_id": null,
+            "rated_ac_power_kw": null,
+            "rated_energy_kwh": 200,
+            "optimizer_quantity": null,
+            "latitude": -6.2,
+            "longitude": 106.8167,
+            "status": "normal",
+            "last_seen_at": "2026-11-09T08:55:00Z"
+          },
+          {
+            "device_id": "DEVICE-DEMO-003",
+            "device_sn": "SN-DEMO-003",
+            "device_name": "Meter Contoh",
+            "device_type": "meter",
+            "model": "EXAMPLE-MODEL",
+            "vendor_device_type_id": null,
+            "rated_ac_power_kw": null,
+            "rated_energy_kwh": null,
+            "optimizer_quantity": null,
+            "latitude": -6.2,
+            "longitude": 106.8167,
+            "status": "normal",
+            "last_seen_at": "2026-11-09T08:55:00Z"
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false
+        }
+      }
+    },
+    "alarms_unconfigured": {
+      "method": "GET",
+      "path": "/api/alarms/PLANT-DEMO-001",
+      "status": 200,
+      "response": {
+        "success": true,
+        "plant_code": "PLANT-DEMO-001",
+        "configured": false,
+        "collected_at": null,
+        "total": null,
+        "data": [],
+        "meta": {
+          "generated_at": "2026-11-08T09:00:00Z",
+          "snapshot_id": "snapshot-example-unconfigured",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": true,
+          "reason": "ALARM_SOURCE_NOT_CONFIGURED"
+        }
+      }
+    },
+    "alarms_configured": {
+      "method": "GET",
+      "path": "/api/alarms/PLANT-DEMO-001",
+      "query": {
+        "state": "active",
+        "severity": "major",
+        "page": 1,
+        "page_size": 20
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "plant_code": "PLANT-DEMO-001",
+        "configured": true,
+        "collected_at": "2026-11-09T09:02:00Z",
+        "total": 1,
+        "data": [
+          {
+            "alarm_id": "ALARM-DEMO-001",
+            "vendor_alarm_id": "VENDOR-DEMO-01",
+            "plant_code": "PLANT-DEMO-001",
+            "device_id": "DEVICE-DEMO-001",
+            "device_sn": "SN-DEMO-001",
+            "severity": "major",
+            "state": "active",
+            "acknowledged": false,
+            "name": "Contoh alarm inverter",
+            "description": "Pesan simulasi untuk dokumentasi",
+            "occurred_at": "2026-11-09T09:01:00Z",
+            "cleared_at": null
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-11-09T09:05:00Z",
+          "snapshot_id": "snapshot-example-002",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false,
+          "page": 1,
+          "page_size": 20,
+          "total_pages": 1
+        }
+      }
+    },
+    "fleet_alarms": {
+      "method": "GET",
+      "path": "/api/alarms",
+      "query": {
+        "state": "active",
+        "severity": "major",
+        "page": 1,
+        "page_size": 20
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "total": 1,
+        "data": [
+          {
+            "alarm_id": "ALARM-DEMO-001",
+            "plant_code": "PLANT-DEMO-001",
+            "plant_name": "PLTS Contoh",
+            "severity": "major",
+            "state": "active",
+            "occurred_at": "2026-11-09T09:01:00Z"
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-11-09T09:05:00Z",
+          "snapshot_id": "snapshot-example-002",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false,
+          "page": 1,
+          "page_size": 20,
+          "total_pages": 1,
+          "coverage": {
+            "configured_plants": 1,
+            "unconfigured_plants": 0,
+            "failed_plants": 0,
+            "complete": true
+          }
+        }
+      }
+    },
+    "register_plant": {
+      "method": "POST",
+      "path": "/api/database/plants",
+      "request_body": {
+        "plant_code": "PLANT-DEMO-001",
+        "plant_name": "PLTS Contoh",
+        "country_code": "ID",
+        "region": "DKI Jakarta",
+        "city": "Jakarta",
+        "address": "Alamat contoh untuk dokumentasi",
+        "time_zone": "Asia/Jakarta",
+        "capacity_kwp": 100,
+        "latitude": -6.2,
+        "longitude": 106.8167,
+        "grid_connected_on": "2026-01-01"
+      },
+      "status": 201,
+      "response": {
+        "success": true,
+        "message": "PLTS berhasil didaftarkan pada sistem monitoring lokal.",
+        "data": {
+          "plant_code": "PLANT-DEMO-001",
+          "plant_name": "PLTS Contoh",
+          "is_demo": true,
+          "country_code": "ID",
+          "country_name": "Indonesia",
+          "region": "DKI Jakarta",
+          "city": "Jakarta",
+          "time_zone": "Asia/Jakarta",
+          "address": "Alamat contoh untuk dokumentasi",
+          "latitude": -6.2,
+          "longitude": 106.8167,
+          "location_source": "verified_device",
+          "location_verified": true,
+          "image_url": null,
+          "grid_connected_on": "2026-01-01",
+          "capacity_kwp": 100,
+          "inverter_rated_power_kw": 80,
+          "ess_rated_capacity_kwh": 200,
+          "optimizer_quantity": 0,
+          "has_pv": true,
+          "has_ess": true,
+          "device_types": [
+            "inverter",
+            "ess",
+            "meter"
+          ],
+          "device_serial_numbers": [
+            "SN-DEMO-001",
+            "SN-DEMO-002",
+            "SN-DEMO-003"
+          ],
+          "device_count": 3
+        },
+        "meta": {
+          "generated_at": "2026-11-09T09:00:00Z",
+          "snapshot_id": "snapshot-example-001",
+          "scope": "authorized_portfolio",
+          "time_zone": "Asia/Jakarta",
+          "is_partial": false
+        }
+      }
+    }
+  },
+  "errors": {
+    "not_found": {
+      "status": 404,
+      "response": {
+        "success": false,
+        "message": "PLTS tidak ditemukan.",
+        "data": null,
+        "error": {
+          "code": "PLANT_NOT_FOUND",
+          "retryable": false,
+          "retry_after_seconds": null,
+          "fields": []
+        },
+        "request_id": "req-example-001"
+      }
+    },
+    "validation": {
+      "status": 422,
+      "response": {
+        "success": false,
+        "message": "Validasi permintaan gagal.",
+        "data": null,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "retryable": false,
+          "retry_after_seconds": null,
+          "fields": [
+            {
+              "field": "latitude",
+              "message": "Latitude harus antara -90 dan 90."
+            }
+          ]
+        },
+        "request_id": "req-example-002"
+      }
+    },
+    "upstream_unavailable": {
+      "status": 503,
+      "response": {
+        "success": false,
+        "message": "Sumber telemetry belum tersedia dan tidak ada cache yang dapat digunakan.",
+        "data": null,
+        "error": {
+          "code": "TELEMETRY_UNAVAILABLE",
+          "retryable": true,
+          "retry_after_seconds": 60,
+          "fields": []
+        },
+        "request_id": "req-example-003"
+      }
+    },
+    "duplicate_plant": {
+      "status": 409,
+      "response": {
+        "success": false,
+        "message": "Plant code sudah terdaftar.",
+        "data": null,
+        "error": {
+          "code": "PLANT_ALREADY_EXISTS",
+          "retryable": false,
+          "retry_after_seconds": null,
+          "fields": [
+            {
+              "field": "plant_code",
+              "message": "Kode PLTS harus unik."
+            }
+          ]
+        },
+        "request_id": "req-example-004"
+      }
+    }
+  }
+}

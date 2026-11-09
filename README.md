@@ -202,6 +202,7 @@ src/
     api.ts                         # Layanan halaman awal
   index.css                        # Tema dan layout responsif
 public/
+  icongreen-logo.png                # Logo IconGreen / Member of PLN Group
   solar-logo.svg
   solar-plant.svg
 docs/
@@ -237,6 +238,7 @@ branch `master`, commit `119b02aa2e5ce29c7d22e5c74e22913674905b56`, kemudian
 dikembangkan menjadi dashboard portofolio pada repository ini.
 
 - [AG Grid React](https://www.ag-grid.com/react-data-grid/getting-started/)
+- [Aset logo IconGreen](https://icongreen.id/wp-content/uploads/2025/09/IconGreen-Website-1-1-scaled.png)
 - [AG Charts React](https://www.ag-grid.com/charts/react/quick-start/)
 - [Leaflet](https://leafletjs.com/reference-1.9.4.html)
 - [Kebijakan tile OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/)

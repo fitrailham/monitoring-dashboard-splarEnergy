@@ -188,36 +188,16 @@ input::-webkit-inner-spin-button {
 .brand-logo {
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-width: 94px;
+  flex-shrink: 0;
+  width: 142px;
+  height: 52px;
 }
-.brand-logo strong {
-  font-size: 12px;
-  color: #16b040;
-  letter-spacing: -0.4px;
-}
-.brand-logo small {
+.brand-logo-image {
   display: block;
-  font-size: 4px;
-  letter-spacing: 0.5px;
-  margin-top: 1px;
-  color: #8b9a80;
-}
-.brand-mark {
-  display: block;
-  position: relative;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background:
-    repeating-conic-gradient(from 0deg, transparent 0deg 7deg, #222 7deg 12deg),
-    conic-gradient(#6fd024 0 33%, #13a2dc 33% 77%, #46ba22 77%);
-  mask: radial-gradient(
-    circle,
-    transparent 0 23%,
-    #000 25% 70%,
-    transparent 72%
-  );
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
 }
 .header-divider {
   width: 1px;
@@ -2039,10 +2019,8 @@ input::-webkit-inner-spin-button {
     flex-wrap: wrap;
   }
   .brand-logo {
-    min-width: 86px;
-  }
-  .brand-logo strong {
-    font-size: 11px;
+    width: 118px;
+    height: 47px;
   }
   .product-name {
     font-size: 12px;

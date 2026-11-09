@@ -276,11 +276,13 @@ export default function PortfolioDashboard() {
           }}
           aria-label="IconGreen home"
         >
-          <span className="brand-mark" />
-          <span>
-            <strong>IconGreen</strong>
-            <small>ENERGY FOR TOMORROW</small>
-          </span>
+          <img
+            className="brand-logo-image"
+            src="/icongreen-logo.png"
+            alt="IconGreen — Member of PLN Group"
+            width="1600"
+            height="642"
+          />
         </a>
         <span className="header-divider" />
         <span className="product-name">FusionSolar</span>

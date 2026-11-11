@@ -5,7 +5,9 @@ import {
   ClientSideRowModelModule,
   CsvExportModule,
   ModuleRegistry,
+  NumberFilterModule,
   PaginationModule,
+  TextFilterModule,
   TooltipModule,
   ValidationModule,
   themeQuartz,
@@ -20,10 +22,13 @@ import {
   statusLabel,
 } from "../services/fleet";
 import Icon from "./Icon";
+import { telemetryFreshness, telemetryLabel } from "../services/quality";
 
 ModuleRegistry.registerModules([
   ClientSideRowModelModule,
   CsvExportModule,
+  TextFilterModule,
+  NumberFilterModule,
   PaginationModule,
   CellStyleModule,
   TooltipModule,
@@ -71,11 +76,13 @@ export default function PlantTable({
   loading,
   onSelect,
   onRefresh,
+  now,
 }: {
   plants: Plant[];
   loading: boolean;
   onSelect: (plant: Plant) => void;
   onRefresh: () => void;
+  now: number;
 }) {
   const grid = useRef<AgGridReact<Plant>>(null);
   const [draft, setDraft] = useState(emptyFilters),
@@ -85,6 +92,7 @@ export default function PlantTable({
     [goTo, setGoTo] = useState("");
   const [columns, setColumns] = useState(false),
     [showAddress, setShowAddress] = useState(false);
+  const [columnFiltersActive, setColumnFiltersActive] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const activePage = pagination.page,
     pages = pagination.pages;
@@ -111,7 +119,9 @@ export default function PlantTable({
       sortable: true,
       resizable: true,
       minWidth: 95,
-      filter: false,
+      filter: "agTextColumnFilter",
+      floatingFilter: true,
+      filterParams: { buttons: ["reset"], debounceMs: 200 },
       suppressHeaderMenuButton: true,
       wrapHeaderText: true,
     }),
@@ -128,6 +138,7 @@ export default function PlantTable({
       headerName,
       width,
       cellDataType: "number",
+      filter: "agNumberColumnFilter",
       valueGetter: (p) =>
         p.data ? number(p.data[key] as number | string | null) : null,
       valueFormatter: (p) => format(p.value, digits),
@@ -138,8 +149,8 @@ export default function PlantTable({
       {
         colId: "status",
         headerName: "Status",
-        width: 100,
-        minWidth: 85,
+        width: 125,
+        minWidth: 110,
         valueGetter: (p) => (p.data ? statusLabel[status(p.data)] : ""),
         cellRenderer: ({ data }: ICellRendererParams<Plant>) =>
           data ? (
@@ -156,6 +167,8 @@ export default function PlantTable({
         headerName: "Plant Image",
         width: 115,
         sortable: false,
+        filter: false,
+        floatingFilter: false,
         suppressSizeToFit: true,
         cellClass: "plant-image-cell",
         cellRenderer: () => (
@@ -196,12 +209,28 @@ export default function PlantTable({
         hide: !showAddress,
         tooltip: ({ data }) => data?.address ?? "",
       },
+      {
+        colId: "telemetry",
+        headerName: "Umur Telemetry",
+        width: 220,
+        valueGetter: ({ data }) => data ? telemetryLabel(telemetryFreshness(data, now)) : "--",
+        cellRenderer: ({ data }: ICellRendererParams<Plant>) => {
+          if (!data) return null;
+          const freshness = telemetryFreshness(data, now);
+          return <span className={`telemetry-badge ${freshness.state}`}
+            title={freshness.measuredAt || "Waktu pengukuran perangkat belum terverifikasi"}>
+            {telemetryLabel(freshness)}
+          </span>;
+        },
+      },
       numeric("capacity_kwp", "Installed PV (kWp)", 145, 3),
       {
         colId: "optimizers",
         headerName: "Optimizer Quantity",
         width: 120,
         sortable: false,
+        cellDataType: "number",
+        filter: "agNumberColumnFilter",
         valueGetter: () => null,
         valueFormatter: () => "--",
       },
@@ -218,6 +247,7 @@ export default function PlantTable({
         headerName: "Specific Energy (kWh/kWp)",
         width: 160,
         cellDataType: "number",
+        filter: "agNumberColumnFilter",
         valueGetter: (p) => (p.data ? specific(p.data) : null),
         valueFormatter: (p) => format(p.value),
         comparator: compareNumbers,
@@ -225,7 +255,7 @@ export default function PlantTable({
       numeric("yield_today_kwh", "Yield Today (kWh)", 145),
       numeric("total_yield_kwh", "Total Yield (kWh)", 155),
     ];
-  }, [onSelect, showAddress]);
+  }, [onSelect, showAddress, now]);
   const syncPagination = useCallback(({ api }: { api: GridApi<Plant> }) => {
     if (api.isDestroyed()) return;
     setPagination({
@@ -240,11 +270,13 @@ export default function PlantTable({
   function download() {
     grid.current?.api.exportDataAsCsv({
       fileName: "solar-plants.csv",
+      exportedRows: "filteredAndSorted",
       columnKeys: [
         "plant_code",
         "plant_name",
         "address",
         "status",
+        "telemetry",
         "capacity_kwp",
         "pv_power_kw",
         "specific",
@@ -313,6 +345,8 @@ export default function PlantTable({
           onClick={() => {
             setDraft(emptyFilters);
             setFilters(emptyFilters);
+            grid.current?.api.setFilterModel(null);
+            setColumnFiltersActive(false);
             setPage(1);
           }}
         >
@@ -418,6 +452,7 @@ export default function PlantTable({
           defaultColDef={defaultColDef}
           getRowId={(p) => p.data.plant_code}
           headerHeight={61}
+          floatingFiltersHeight={40}
           rowHeight={53}
           pagination
           paginationPageSize={size}
@@ -429,6 +464,11 @@ export default function PlantTable({
           onGridReady={syncPagination}
           onPaginationChanged={syncPagination}
           onModelUpdated={syncPagination}
+          onFilterChanged={({ api }) => {
+            api.paginationGoToFirstPage();
+            setColumnFiltersActive(api.isAnyFilterPresent());
+            syncPagination({ api });
+          }}
           onCellKeyDown={(e) => {
             if (
               "colDef" in e &&
@@ -446,7 +486,7 @@ export default function PlantTable({
       <footer className="table-footer">
         <span>
           Total: <strong>{pagination.total}</strong>{" "}
-          {filters.name || filters.region || filters.type || filters.state
+          {filters.name || filters.region || filters.type || filters.state || columnFiltersActive
             ? `dari ${plants.length} PLTS`
             : ""}
         </span>

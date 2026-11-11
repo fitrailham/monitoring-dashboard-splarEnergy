@@ -21,10 +21,13 @@ import FleetSummary from "../components/FleetSummary";
 import type { AlarmSummary } from "../components/FleetSummary";
 import PlantTable from "../components/PlantTable";
 import FleetStatistics from "../components/FleetStatistics";
+import { telemetryFreshness, telemetryLabel } from "../services/quality";
 const PlantMap = lazy(() => import("../components/PlantMap"));
+const HomeOverview = lazy(() => import("../components/HomeOverview"));
 
-type View = "list" | "map" | "statistics";
+type View = "overview" | "list" | "map" | "statistics";
 const views: { id: View; icon: IconName; label: string }[] = [
+  { id: "overview", icon: "home", label: "Dashboard" },
   { id: "list", icon: "list", label: "Plant list" },
   { id: "map", icon: "globe", label: "Map view" },
   { id: "statistics", icon: "chart", label: "Statistics" },
@@ -40,11 +43,14 @@ function PlantDrawer({
   plant,
   onClose,
   onStatistics,
+  now,
 }: {
   plant: Plant;
   onClose: () => void;
   onStatistics: () => void;
+  now: number;
 }) {
+  const freshness = telemetryFreshness(plant, now);
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -110,6 +116,12 @@ function PlantDrawer({
           <Icon name="pin" size={17} />
           {plant.address || "Alamat belum tersedia"}
         </p>
+        <div className={`telemetry-detail ${freshness.state}`}>
+          <strong>{telemetryLabel(freshness)}</strong>
+          <span>{freshness.measuredAt
+            ? `${freshness.state === "unverified" ? "Timestamp belum terverifikasi" : "Waktu pengukuran"}: ${new Date(freshness.measuredAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`
+            : "Waktu collector belum membuktikan waktu pengukuran perangkat."}</span>
+        </div>
         <div className="detail-metrics">
           {[
             {
@@ -167,8 +179,13 @@ function PlantDrawer({
 }
 
 export default function PortfolioDashboard() {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
   const [plants, setPlants] = useState<Plant[]>([]),
-    [view, setView] = useState<View>("list");
+    [view, setView] = useState<View>("overview");
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [warning, setWarning] = useState(""),
@@ -186,6 +203,7 @@ export default function PortfolioDashboard() {
       setWarning(result.warning);
       setError("");
       setUpdated(new Date());
+      setNow(Date.now());
       setSelected((previous) =>
         result.plants.some((p) => p.plant_code === previous)
           ? previous
@@ -272,7 +290,7 @@ export default function PortfolioDashboard() {
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            changeView("list");
+            changeView("overview");
           }}
           aria-label="IconGreen home"
         >
@@ -289,14 +307,14 @@ export default function PortfolioDashboard() {
         <button
           className="header-home"
           aria-label="Home"
-          onClick={() => changeView("list")}
+          onClick={() => changeView("overview")}
         >
           <Icon name="home" size={23} />
         </button>
         <nav className="main-nav" aria-label="Main navigation">
           <button
-            className={view === "map" ? "" : "active"}
-            onClick={() => changeView("list")}
+            className={view === "overview" ? "active" : ""}
+            onClick={() => changeView("overview")}
           >
             Home
           </button>
@@ -411,7 +429,7 @@ export default function PortfolioDashboard() {
         )}
       </header>
       <div
-        className={`view-switcher ${view === "map" ? "on-map" : ""}`}
+        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""}`}
         role="group"
         aria-label="Dashboard view"
       >
@@ -428,15 +446,16 @@ export default function PortfolioDashboard() {
           </button>
         ))}
       </div>
-      {view !== "map" && (
+      {view !== "map" && view !== "overview" && (
         <FleetSummary
           plants={plants}
           alarms={alarms}
           onStats={() => changeView("statistics")}
           onStatus={() => changeView("list")}
+          now={now}
         />
       )}
-      <main className={view === "map" ? "main-map" : "main-content"}>
+      <main className={view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
         {(error || warning) && (
           <div
             className={`connection-banner ${error ? "error-banner" : ""}`}
@@ -454,12 +473,19 @@ export default function PortfolioDashboard() {
             </button>
           </div>
         )}
+        {view === "overview" && (
+          <Suspense fallback={<div className="map-loading">Memuat Dashboard…</div>}>
+            <HomeOverview plants={plants} alarms={alarms} now={now} selected={selected}
+              onChange={setSelected} onSelect={selectPlant} refreshKey={updated?.getTime() ?? 0} />
+          </Suspense>
+        )}
         {view === "list" && (
           <PlantTable
             plants={plants}
             loading={loading}
             onSelect={selectPlant}
             onRefresh={() => void load()}
+            now={now}
           />
         )}
         {view === "statistics" && (
@@ -467,6 +493,7 @@ export default function PortfolioDashboard() {
             plants={plants}
             selected={selected}
             onChange={setSelected}
+            refreshKey={updated?.getTime() ?? 0}
           />
         )}
         {view === "map" && (
@@ -481,14 +508,14 @@ export default function PortfolioDashboard() {
             <PlantMap plants={plants} onSelect={selectPlant} />
           </Suspense>
         )}
-        {view !== "map" && (
+        {view !== "map" && view !== "overview" && (
           <footer className="app-footer">
             <span>
               <i
                 className={`connection-dot ${error ? "offline" : updated ? "online" : ""}`}
               />
               {updated
-                ? `Last synced ${updated.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })} WIB`
+                ? `API synced ${updated.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })} WIB`
                 : "Connecting to monitoring…"}
               <span className="footer-separator">·</span>Auto-refresh 5 min
             </span>
@@ -506,6 +533,7 @@ export default function PortfolioDashboard() {
             plants.find((p) => p.plant_code === detail.plant_code) ?? detail
           }
           onClose={() => setDetail(null)}
+          now={now}
           onStatistics={() => {
             setDetail(null);
             changeView("statistics");

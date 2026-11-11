@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import type { AgPolarChartOptions } from "ag-charts-community";
 import { DashboardDonutChart } from "./AgDashboardChart";
 import type { Plant } from "../services/fleet";
-import { format, status, statusLabel, sum } from "../services/fleet";
+import { format, status, statusLabel } from "../services/fleet";
+import { aggregateMetric, metricCoverageDetail, metricCoverageLabel, telemetryFreshness } from "../services/quality";
+import type { MetricSummary } from "../services/quality";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -90,11 +92,13 @@ function KPI({
   label,
   value,
   unit,
+  coverage,
 }: {
   icon: IconName;
   label: string;
   value: number | null;
   unit: string;
+  coverage?: MetricSummary;
 }) {
   return (
     <div className="fleet-kpi">
@@ -106,6 +110,11 @@ function KPI({
           {format(value)} <small>{unit}</small>
         </div>
         <span>{label}</span>
+        {coverage && (
+          <small className={`kpi-coverage ${coverage.partial ? "partial" : ""}`} title={metricCoverageDetail(coverage)}>
+            {metricCoverageLabel(coverage)}
+          </small>
+        )}
       </div>
     </div>
   );
@@ -115,20 +124,23 @@ export default function FleetSummary({
   alarms,
   onStats,
   onStatus,
+  now,
 }: {
   plants: Plant[];
   alarms: AlarmSummary;
   onStats: () => void;
   onStatus: () => void;
+  now: number;
 }) {
   const statuses = ["normal", "faulty", "disconnected", "unknown"] as const;
   const values = statuses.map(
     (s) => plants.filter((p) => status(p) === s).length,
   );
-  const power = sum(plants, "pv_power_kw"),
-    yieldToday = sum(plants, "yield_today_kwh"),
-    capacity = sum(plants, "capacity_kwp"),
-    totalYield = sum(plants, "total_yield_kwh");
+  const power = aggregateMetric(plants, "pv_power_kw", now),
+    yieldToday = aggregateMetric(plants, "yield_today_kwh", now),
+    capacity = aggregateMetric(plants, "capacity_kwp", now),
+    totalYield = aggregateMetric(plants, "total_yield_kwh", now);
+  const freshness = plants.map((plant) => telemetryFreshness(plant, now));
   return (
     <section className="fleet-summary" aria-label="Fleet overview">
       <div className="solar-grid" aria-hidden="true" />
@@ -145,21 +157,24 @@ export default function FleetSummary({
           <KPI
             icon="bolt"
             label="Current power"
-            value={power === null ? null : power / 1000}
+            value={power.value === null ? null : power.value / 1000}
             unit="MW"
+            coverage={power}
           />
           <KPI
             icon="sun"
             label="Yield today"
-            value={yieldToday === null ? null : yieldToday / 1000}
+            value={yieldToday.value === null ? null : yieldToday.value / 1000}
             unit="MWh"
+            coverage={yieldToday}
           />
           <KPI icon="coins" label="Revenue today" value={null} unit="Rp" />
           <KPI
             icon="panel"
             label="Installed PV capacity"
-            value={capacity === null ? null : capacity / 1000}
+            value={capacity.value === null ? null : capacity.value / 1000}
             unit="MWp"
+            coverage={capacity}
           />
           <KPI
             icon="battery"
@@ -170,8 +185,9 @@ export default function FleetSummary({
           <KPI
             icon="globe"
             label="Total yield"
-            value={totalYield === null ? null : totalYield / 1e6}
+            value={totalYield.value === null ? null : totalYield.value / 1e6}
             unit="GWh"
+            coverage={totalYield}
           />
         </div>
       </article>
@@ -249,6 +265,14 @@ export default function FleetSummary({
           </div>
         </div>
       </article>
+      <div className="fleet-data-quality" aria-label="Kualitas waktu pengukuran">
+        <span>Telemetry:</span>
+        <span>{freshness.filter((item) => item.state === "fresh").length} terbaru</span>
+        <span>{freshness.filter((item) => item.state === "stale").length} lama</span>
+        <span>{freshness.filter((item) => item.state === "unverified").length} belum terverifikasi</span>
+        <span>{freshness.filter((item) => item.state === "missing").length} tanpa waktu</span>
+        <small>KPI telemetry hanya menjumlahkan pengukuran terbaru yang terverifikasi.</small>
+      </div>
     </section>
   );
 }

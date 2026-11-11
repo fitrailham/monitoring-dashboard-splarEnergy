@@ -2,15 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Plant } from "../services/fleet";
-import { format, number } from "../services/fleet";
+import { format, number, status } from "../services/fleet";
 import Icon from "./Icon";
 
 export default function PlantMap({
   plants,
   onSelect,
+  overview = false,
 }: {
   plants: Plant[];
   onSelect: (plant: Plant) => void;
+  overview?: boolean;
 }) {
   const element = useRef<HTMLDivElement>(null),
     mapRef = useRef<L.Map | null>(null),
@@ -46,7 +48,7 @@ export default function PlantMap({
       zoomControl: false,
       minZoom: 2,
       maxZoom: 18,
-    }).setView([8, 72], 3);
+    }).setView(overview ? [-2.4, 118] : [8, 72], overview ? 5 : 3);
     mapRef.current = map;
     L.tileLayer(
       import.meta.env.VITE_MAP_TILE_URL ||
@@ -68,7 +70,7 @@ export default function PlantMap({
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [overview]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -78,13 +80,18 @@ export default function PlantMap({
       button.className = "map-popup-link";
       button.textContent = plant.plant_name;
       button.addEventListener("click", () => onSelect(plant));
-      L.circleMarker([number(plant.latitude)!, number(plant.longitude)!], {
+      const position: L.LatLngExpression = [number(plant.latitude)!, number(plant.longitude)!];
+      const marker = overview ? L.marker(position, { icon: L.divIcon({
+        className: `command-marker ${status(plant)}`,
+        html: '<span><i></i></span>', iconSize: [32, 42], iconAnchor: [16, 42],
+      }) }) : L.circleMarker(position, {
         radius: 10,
         color: "#bf56ff",
         fillColor: "#a62cff",
         fillOpacity: 0.85,
         weight: 5,
-      })
+      });
+      marker
         .bindPopup(button)
         .addTo(layer);
     }
@@ -96,12 +103,14 @@ export default function PlantMap({
               [number(p.latitude)!, number(p.longitude)!] as [number, number],
           ),
         ),
-        { padding: [80, 80], maxZoom: 12 },
+        overview && map.getSize().x > 1100
+          ? { paddingTopLeft: [340, 100], paddingBottomRight: [340, 100], maxZoom: 8 }
+          : { padding: [80, 80], maxZoom: overview ? 8 : 12 },
       );
     return () => {
       map.removeLayer(layer);
     };
-  }, [located, onSelect]);
+  }, [located, onSelect, overview]);
   return (
     <section className="map-view">
       <div

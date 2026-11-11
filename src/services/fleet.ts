@@ -1,5 +1,5 @@
 export const API_BASE = (
-  import.meta.env.VITE_API_URL?.trim() || "http://127.0.0.1:8000"
+  import.meta.env?.VITE_API_URL?.trim() || "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
 export type Numeric = number | string | null;
 export interface Plant {
@@ -23,11 +23,20 @@ export interface Plant {
   latitude?: Numeric;
   longitude?: Numeric;
   is_demo?: boolean;
-}
-export interface HistoryRow {
-  recorded_at: string;
-  yield_today_kwh: Numeric;
-  pv_power_kw: Numeric;
+  time_zone?: string;
+  has_pv?: boolean;
+  measured_at?: string | null;
+  measurement_time_verified?: boolean;
+  yield_business_date?: string | null;
+  data_quality?: {
+    state?: "fresh" | "stale" | "partial" | "missing" | "unverified";
+    measured_at?: string | null;
+    measurement_time_verified?: boolean;
+    stale_after_seconds?: number;
+    missing_fields?: string[];
+    not_applicable_fields?: string[];
+    field_quality?: Record<string, string>;
+  };
 }
 interface ApiResponse<T> {
   success: boolean;
@@ -35,6 +44,15 @@ interface ApiResponse<T> {
   message?: string;
   detail?: string;
   configured?: boolean;
+  meta?: { is_partial?: boolean; warnings?: string[] };
+}
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
 }
 export function number(value: Numeric | undefined): number | null {
   if (
@@ -66,10 +84,11 @@ export async function request<T>(
   }
   const result = await response.json().catch(() => null);
   if (!response.ok || !result?.success)
-    throw new Error(
+    throw new ApiError(
       typeof result?.detail === "string"
         ? result.detail
         : result?.message || `API error (${response.status})`,
+      response.status,
     );
   return result;
 }
@@ -96,15 +115,6 @@ export async function getFleet(signal?: AbortSignal) {
         ? "Informasi alamat PLTS belum dapat dimuat."
         : "",
   };
-}
-export async function getHistory(code: string, signal?: AbortSignal) {
-  const response = await request<HistoryRow[]>(
-    `/api/database/history/${encodeURIComponent(code)}?limit=500`,
-    signal,
-  );
-  if (!Array.isArray(response.data))
-    throw new Error("Format riwayat monitoring tidak valid.");
-  return response.data;
 }
 export type PlantStatus = "normal" | "faulty" | "disconnected" | "unknown";
 export function status(plant: Plant): PlantStatus {

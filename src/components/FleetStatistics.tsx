@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { format, getHistory, jakartaDate, specific } from "../services/fleet";
-import type { HistoryRow, Plant } from "../services/fleet";
-import { historyBuckets } from "../services/statistics";
+import { format, jakartaDate, specific } from "../services/fleet";
+import type { Plant } from "../services/fleet";
+import { statisticsRange } from "../services/statistics";
 import type { ChartPoint, Period } from "../services/statistics";
+import { calendarDate, validTimeZone } from "../services/calendar";
+import { getYieldStatistics } from "../services/yieldStatistics";
+import type { YieldResult } from "../services/yieldStatistics";
 import Icon from "./Icon";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import { DashboardBarChart } from "./AgDashboardChart";
@@ -38,9 +41,13 @@ function YieldChart({
               title: datum.label,
               data: [
                 {
-                  label: "Yield kumulatif",
+                  label: "Energi interval",
                   value: format(datum.value) + " kWh",
                 },
+                { label: "Kualitas", value: {
+                  measured: "Terukur", derived: "Dihitung", partial: "Parsial",
+                  missing: "Tidak tersedia", pending: "Belum berlangsung",
+                }[datum.quality] },
               ],
             }),
           },
@@ -233,38 +240,41 @@ export default function FleetStatistics({
   plants,
   selected,
   onChange,
+  refreshKey = 0,
 }: {
   plants: Plant[];
   selected: string;
   onChange: (code: string) => void;
+  refreshKey?: number;
 }) {
-  const [history, setHistory] = useState<HistoryRow[]>([]),
-    [period, setPeriod] = useState<Period>("Day"),
-    [date, setDate] = useState(jakartaDate()),
-    [error, setError] = useState(""),
-    [loading, setLoading] = useState(false);
+  const timeZone = validTimeZone(plants.find((plant) => plant.plant_code === selected)?.time_zone);
+  const [period, setPeriod] = useState<Period>("Day"),
+    [date, setDate] = useState(() => calendarDate(Date.now(), timeZone)),
+    [retry, setRetry] = useState(0);
+  const [mountedAt] = useState(Date.now);
+  const range = useMemo(
+    () => statisticsRange(period, date, timeZone, new Date(refreshKey || mountedAt)),
+    [period, date, timeZone, refreshKey, mountedAt],
+  );
+  const queryKey = JSON.stringify([selected, range, refreshKey, retry]);
+  const [response, setResponse] = useState<{ key: string; result: YieldResult | null; error: string } | null>(null);
+  const active = response?.key === queryKey ? response : null;
+  const loading = Boolean(selected) && active === null;
+  const error = active?.error ?? "";
+  const result = active?.result ?? null;
+  const points = result?.points ?? [];
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
-    setLoading(true);
-    setHistory([]);
-    setError("");
-    getHistory(selected, controller.signal)
-      .then((rows) => {
-        if (!controller.signal.aborted) setHistory(rows);
+    getYieldStatistics(selected, range, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setResponse({ key: queryKey, result, error: "" });
       })
       .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) setResponse({ key: queryKey, result: null, error: e.message });
       });
     return () => controller.abort();
-  }, [selected]);
-  const points = useMemo(
-    () => historyBuckets(history, period, date),
-    [history, period, date],
-  );
+  }, [selected, range, queryKey]);
   function moveDate(direction: number) {
     const next = new Date(date + "T12:00:00+07:00");
     if (period === "Day") next.setUTCDate(next.getUTCDate() + direction);
@@ -272,7 +282,8 @@ export default function FleetStatistics({
       next.setUTCDate(1);
       next.setUTCMonth(next.getUTCMonth() + direction);
     } else next.setUTCFullYear(next.getUTCFullYear() + direction);
-    setDate(jakartaDate(next));
+    const nextDate = jakartaDate(next);
+    if (nextDate >= "1970-01-01" && nextDate <= "2100-12-31") setDate(nextDate);
   }
   return (
     <section className="statistics-grid">
@@ -320,16 +331,17 @@ export default function FleetStatistics({
                         ? date.slice(0, 7)
                         : date.slice(0, 4)
                   }
-                  min={period === "Year" ? "2000" : undefined}
-                  max={period === "Year" ? "2100" : undefined}
+                  min={period === "Year" ? "1970" : period === "Month" ? "1970-01" : "1970-01-01"}
+                  max={period === "Year" ? "2100" : period === "Month" ? "2100-12" : "2100-12-31"}
                   onChange={(e) => {
                     if (!e.target.value) return;
+                    if (!e.target.validity.valid) return;
                     if (period === "Day") setDate(e.target.value);
                     else if (period === "Month")
                       setDate(e.target.value + "-01");
                     else if (
                       e.target.value.length === 4 &&
-                      Number(e.target.value) >= 2000 &&
+                      Number(e.target.value) >= 1970 &&
                       Number(e.target.value) <= 2100
                     )
                       setDate(e.target.value + "-01-01");
@@ -360,22 +372,32 @@ export default function FleetStatistics({
           </select>
           <span className="history-badge">
             <i />
-            {loading ? "Loading history…" : `${history.length} records`}
+            {loading ? "Memuat statistik…" : result
+              ? `${result.completeBuckets}/${result.elapsedBuckets} interval lengkap`
+              : "Statistik belum tersedia"}
           </span>
         </label>
         {error ? (
           <div className="chart-error" role="alert">
             <Icon name="info" />
             <span>{error}</span>
+            <button className="text-button" onClick={() => setRetry((value) => value + 1)}>Coba lagi</button>
           </div>
         ) : (
           <YieldChart points={points} loading={loading} />
         )}
+        {result && !result.complete && (
+          <p className="statistics-coverage-warning" role="status">
+            {result.truncated ? "Riwayat belum mencakup seluruh rentang yang diminta. " : "Data periode ini masih parsial. "}
+            {result.completeBuckets} dari {result.elapsedBuckets} interval yang telah berjalan lengkap.
+            Total periode belum dapat dianggap lengkap.
+          </p>
+        )}
         <p className="chart-caption">
-          {period === "Day"
-            ? "Yield kumulatif: pembacaan terakhir setiap jam (WIB)."
-            : "Yield dari nilai harian tertinggi pada rekaman yang tersedia."}{" "}
-          Maksimal 500 rekaman; periode tanpa data ditampilkan kosong.
+          Energi produksi per {period === "Day" ? "jam" : period === "Month" ? "hari" : period === "Year" ? "bulan" : "tahun"} ({timeZone}).
+          {" "}Periode tanpa pengukuran ditampilkan kosong.
+          {period === "Lifetime" ? ` Arsip sejak 1970 hingga ${calendarDate(new Date(range.to).getTime() - 1, timeZone).slice(0, 4)}.` : ""}
+          {result && result.pendingBuckets > 0 ? ` ${result.pendingBuckets} interval mendatang belum dinilai.` : ""}
         </p>
       </article>
       <div className="statistics-right">

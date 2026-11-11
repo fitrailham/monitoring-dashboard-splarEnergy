@@ -1,76 +1,39 @@
-import { jakartaDate, number } from "./fleet";
-import type { HistoryRow } from "./fleet";
+import { calendarDate, calendarMidnight, DEFAULT_TIME_ZONE } from "./calendar.ts";
 export type Period = "Day" | "Month" | "Year" | "Lifetime";
 export interface ChartPoint {
   label: string;
   value: number | null;
+  quality: "measured" | "derived" | "partial" | "missing" | "pending";
 }
-export function historyBuckets(
-  history: HistoryRow[],
-  period: Period,
-  date: string,
-): ChartPoint[] {
-  const daily = new Map<string, number>();
-  for (const row of history) {
-    const value = number(row.yield_today_kwh);
-    if (value === null || !Number.isFinite(new Date(row.recorded_at).getTime()))
-      continue;
-    const day = jakartaDate(row.recorded_at);
-    daily.set(day, Math.max(daily.get(day) ?? 0, value));
+export interface StatisticsRange {
+  from: string;
+  to: string;
+  grain: "hour" | "day" | "month" | "year";
+  timeZone: string;
+}
+export function statisticsRange(
+  period: Period, date: string, timeZone = DEFAULT_TIME_ZONE, now = new Date(),
+): StatisticsRange {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || year < 1970 || year > 2100 ||
+      new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== date) {
+    throw new Error("Tanggal statistik tidak valid.");
   }
-  if (period === "Day") {
-    const hours = new Map<number, { time: number; value: number }>();
-    for (const row of history) {
-      const value = number(row.yield_today_kwh),
-        time = new Date(row.recorded_at).getTime();
-      if (
-        value === null ||
-        !Number.isFinite(time) ||
-        jakartaDate(row.recorded_at) !== date
-      )
-        continue;
-      const hour = Number(
-        new Intl.DateTimeFormat("en-GB", {
-          timeZone: "Asia/Jakarta",
-          hour: "2-digit",
-          hourCycle: "h23",
-        }).format(new Date(time)),
-      );
-      if (!hours.has(hour) || hours.get(hour)!.time < time)
-        hours.set(hour, { time, value });
-    }
-    return Array.from({ length: 24 }, (_, i) => ({
-      label: String(i).padStart(2, "0"),
-      value: hours.get(i)?.value ?? null,
-    }));
-  }
+  let start = [year, month, day], end = [year, month, day + 1];
+  let grain: StatisticsRange["grain"] = "hour";
   if (period === "Month") {
-    const length = new Date(
-      Number(date.slice(0, 4)),
-      Number(date.slice(5, 7)),
-      0,
-    ).getDate();
-    return Array.from({ length }, (_, i) => ({
-      label: String(i + 1).padStart(2, "0"),
-      value:
-        daily.get(`${date.slice(0, 7)}-${String(i + 1).padStart(2, "0")}`) ??
-        null,
-    }));
+    start = [year, month, 1]; end = [year, month + 1, 1]; grain = "day";
+  } else if (period === "Year") {
+    start = [year, 1, 1]; end = [year + 1, 1, 1]; grain = "month";
+  } else if (period === "Lifetime") {
+    // Historical bound for the monitoring archive; never a fixed number of rows.
+    start = [1970, 1, 1];
+    end = [Number(calendarDate(now, timeZone).slice(0, 4)) + 1, 1, 1];
+    grain = "year";
   }
-  const totals = new Map<string, number>();
-  for (const [day, value] of daily) {
-    if (period === "Year" && !day.startsWith(date.slice(0, 4))) continue;
-    const key = period === "Year" ? day.slice(5, 7) : day.slice(0, 4);
-    totals.set(key, (totals.get(key) ?? 0) + value);
-  }
-  return period === "Year"
-    ? Array.from({ length: 12 }, (_, i) => ({
-        label: new Intl.DateTimeFormat("en", { month: "short" }).format(
-          new Date(2026, i, 1),
-        ),
-        value: totals.get(String(i + 1).padStart(2, "0")) ?? null,
-      }))
-    : [...totals]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([label, value]) => ({ label, value }));
+  return {
+    from: calendarMidnight(start[0], start[1], start[2], timeZone),
+    to: calendarMidnight(end[0], end[1], end[2], timeZone),
+    grain, timeZone,
+  };
 }

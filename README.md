@@ -66,14 +66,36 @@ menggunakan tile HTTPS OpenStreetMap dan membutuhkan koneksi internet.
 
 ## Tampilan dan fitur yang aktif
 
-Gunakan tiga tombol di sisi kanan dashboard untuk beralih tampilan.
+Gunakan empat tombol di sisi kanan dashboard untuk beralih antara Dashboard,
+daftar PLTS, peta, dan statistik. Menu Home membuka Dashboard; Plants membuka tabel.
+
+### Dashboard
+
+- Peta Indonesia dengan marker status PLTS, pencarian, dan akses panel detail.
+- Tampilan monitoring gelap dengan panel di sisi kiri/kanan dan ringkasan portofolio.
+- Grafik daya harian dan energi bulanan mengikuti PLTS yang dipilih pada kontrol
+  Grafik PLTS. Grafik daya memakai hingga 500 sampel history hari ini dengan waktu
+  pengukuran terverifikasi; gap lebih dari 30 menit tidak dihubungkan.
+- Grafik bulanan memakai statistik energi interval tanpa batas 500 rekaman.
+- Ranking total yield memakai nilai overview terverifikasi; alarm menampilkan
+  jumlah dan cakupan yang tersedia. Ringkasan KPI mengikuti aturan freshness/cakupan.
+- Panel O&M dan manfaat lingkungan menampilkan -- sampai data/metode tersedia.
+- Layout berubah menjadi peta di atas dan panel bertumpuk pada layar kecil.
 
 ### Plant list
 
 - Ringkasan portofolio: current power, yield today, installed PV capacity, total
   yield, status PLTS, dan cakupan alarm berdasarkan data yang tersedia.
+- Cakupan per KPI serta jumlah telemetry terbaru/lama/belum terverifikasi/tanpa waktu.
+- Kolom umur telemetry dan timestamp pengukuran pada panel detail PLTS.
 - Tabel AG Grid dengan pencarian nama/kode PLTS dan wilayah.
 - Filter PV/ESS serta status pada bagian Expand.
+- Filter langsung di bawah header setiap kolom data: teks untuk nama, status,
+  wilayah/alamat dan telemetry; angka untuk kapasitas, SOC, daya, serta energi.
+  Tombol filter membuka pilihan kondisi seperti lebih besar/kecil dan rentang.
+  Kolom gambar merupakan ilustrasi sehingga tidak memiliki filter.
+- Filter kolom dapat digabung dengan pencarian utama. Reset menghapus seluruh
+  filter, dan ekspor CSV mengikuti hasil filter serta pengurutan yang aktif.
 - Pengurutan numerik, pengubahan lebar kolom, pilihan 10/20/50 baris, dan pagination.
 - Pengaturan untuk menampilkan kolom alamat.
 - Ekspor CSV seluruh hasil filter/pengurutan, termasuk baris di halaman lain.
@@ -104,20 +126,30 @@ tersedia dengan daftar alamat dan penjelasan kondisi lokasi.
 - Klik batang ranking atau pilih PLTS untuk mengganti riwayat yang ditampilkan.
 - Loading, error, serta periode tanpa data ditampilkan secara terpisah.
 
-Perhitungan saat ini memakai maksimum 500 rekaman history:
+Statistik meminta agregasi energi dari backend untuk seluruh rentang yang dipilih,
+tanpa memakai batas 500 rekaman history. Mengganti PLTS, tanggal, atau periode
+mengambil statistik baru; refresh portofolio yang berhasil juga memperbarui grafik.
 
 | Periode | Perhitungan yang diterapkan |
 | --- | --- |
-| Day | Pembacaan yield kumulatif terakhir setiap jam, dalam Asia/Jakarta |
-| Month | Nilai yield harian tertinggi pada rekaman yang tersedia |
-| Year | Penjumlahan nilai harian tersebut per bulan |
-| Lifetime | Penjumlahan nilai harian tersebut per tahun dalam riwayat yang diterima |
+| Day | Energi interval per jam pada hari pilihan |
+| Month | Energi per hari pada bulan pilihan |
+| Year | Energi per bulan pada tahun pilihan |
+| Lifetime | Energi per tahun untuk arsip sejak 1970 hingga akhir tahun berjalan |
 
-Grafik Day masih **yield kumulatif**, bukan energi produksi tiap interval jam.
-Month/Year/Lifetime belum menjamin laporan lengkap di luar riwayat yang diterima.
-Periode yang tidak memiliki rekaman dibiarkan kosong. Specific energy dihitung
+Parameter `from` inklusif dan `to` eksklusif mengikuti `time_zone` PLTS,
+dengan fallback Asia/Jakarta. Backend bertanggung jawab menghitung energi interval
+dan menangani baseline, reset counter, serta gap pengukuran. Response harus
+memakai `aggregation: interval_energy` dan `unit: kWh`.
+
+Interval missing/pending dibiarkan kosong, sedangkan nol terukur tetap ditampilkan.
+Badge menunjukkan interval lengkap dibanding interval yang telah berjalan.
+Flag `complete`, `meta.is_partial`, `truncated`, dan kualitas bucket menentukan
+peringatan kelengkapan. Response dengan rentang/unit/jenis agregasi yang salah
+ditolak. Backend tanpa endpoint statistik menampilkan error, tanpa fallback
+ke maksimum 500 rekaman yang bisa menyesatkan. Specific energy dihitung
 sebagai yield harian kWh dibagi kapasitas PV kWp; kapasitas 0/null tidak diranking.
-Timezone statistik saat ini tetap Asia/Jakarta, belum mengikuti timezone tiap PLTS.
+Ranking tetap memakai overview harian, terpisah dari periode grafik pilihan.
 
 ## API yang digunakan saat ini
 
@@ -128,23 +160,36 @@ Dokumentasi Swagger: `http://127.0.0.1:8000/docs`.
 | --- | --- |
 | `GET /api/database/overview` | Baris monitoring, KPI portofolio, dan ranking |
 | `GET /api/database/plants` | Metadata/alamat yang digabung berdasarkan plant_code |
-| `GET /api/database/history/{plant_code}?limit=500` | Riwayat statistik PLTS pilihan |
+| `GET /api/database/yield-statistics?plant_code=...&from=...&to=...&grain=...&time_zone=...` | Statistik energi interval sesuai rentang pilihan |
+| `GET /api/database/history/{plant_code}?limit=500` | Sampel daya harian PLTS pilihan di Home; tidak dipakai menghitung total energi |
 | `GET /api/alarms/{plant_code}` | Alarm pada PLTS yang configured |
 
 Format respons dasar yang dibaca layanan frontend adalah `success: true` dengan
-`data` berupa array. Nomor dan metrik kosong dinormalisasi sebelum ditampilkan.
-Satuan pada overview/history: daya kW, kapasitas PV kWp, yield/energi ESS kWh,
+`data` berupa array untuk overview/metadata/alarm, dan objek berisi `buckets`
+untuk statistik. Nomor dan metrik kosong dinormalisasi sebelum ditampilkan.
+Satuan pada overview/statistik: daya kW, kapasitas PV kWp, yield/energi ESS kWh,
 dan SOC persen. Format MW/MWh/GWh diterapkan pada kartu yang sesuai.
 
 Overview dan metadata dimuat bersama. Portofolio diperbarui setiap lima menit;
 refresh manual tersedia. Permintaan alarm dibatasi empat PLTS sekaligus. Jika
 pembaruan portofolio gagal, data terakhir tetap ditampilkan bersama pesan error.
-Label Last synced adalah waktu frontend berhasil mengambil data, bukan bukti
-waktu pengukuran perangkat.
+Label API synced adalah waktu frontend berhasil mengambil data. Umur telemetry
+dihitung terpisah dari timestamp pengukuran dan diperbarui setiap 30 detik.
 
 PLTS awal statistik mengikuti default pada source PortfolioDashboard jika kode
-tersebut ditemukan, atau memakai PLTS pertama. KPI masih dijumlahkan di FE dari
-nilai non-null, belum memakai summary BE dengan kualitas/cakupan per metrik.
+tersebut ditemukan, atau memakai PLTS pertama. KPI masih dihitung dari seluruh
+overview di frontend, belum memakai endpoint summary BE. Tiap KPI menunjukkan
+jumlah PLTS valid dibanding PLTS relevan, dengan rincian kosong/lama/belum
+terverifikasi melalui tooltip. PLTS demo dan metrik tidak relevan dikecualikan.
+
+KPI telemetry hanya memasukkan nilai dengan waktu pengukuran terverifikasi dan
+belum kedaluwarsa. Gunakan `data_quality.measured_at`/`measured_at`, flag
+`measurement_time_verified`, kualitas per field, dan `stale_after_seconds`
+(default 900 detik jika tidak diberikan). Timestamp collector saja, timestamp
+tanpa offset, dan timestamp di masa depan tidak dianggap bukti freshness.
+Yield today harus memiliki tanggal bisnis hari ini pada zona waktu PLTS.
+Kapasitas PV merupakan metadata sehingga tidak disaring berdasarkan usia telemetry.
+Nilai parsial diberi label; jika tidak ada nilai valid, KPI menampilkan --, bukan 0.
 
 ## Kondisi data dan fitur yang belum lengkap
 
@@ -175,9 +220,10 @@ metadata operasional disimpan lokal, tidak disertakan dalam repository public.
 - [Contoh kontrak JSON](docs/backend-api-contract.examples.json): contoh method,
   path, parameter/body, status HTTP, dan response. Seluruh nilai adalah fixture
   ilustratif, bukan data produksi.
-Endpoint summary portofolio, statistik energi interval, ranking server, alarm
+Endpoint summary portofolio, ranking server, alarm
 fleet, dan POST Add Plant pada dokumen tersebut adalah **usulan**. Frontend aktif
-masih menggunakan endpoint yang tercantum pada bagian API di atas. Pemakaian AG
+masih menggunakan endpoint yang tercantum pada bagian API di atas, termasuk
+statistik energi interval. Ketersediaan data bergantung pada backend/database. Pemakaian AG
 Grid/AG Charts tidak mengharuskan BE mengirim konfigurasi chart; BE tetap mengirim
 data JSON dan konfigurasi visual dikelola frontend.
 
@@ -198,7 +244,10 @@ src/
     Icon.tsx                       # Ikon SVG
   services/
     fleet.ts                       # API aktif dan normalisasi data
-    statistics.ts                  # Pengelompokan riwayat yang dipakai sekarang
+    statistics.ts                  # Rentang kalender dan grain statistik
+    yieldStatistics.ts             # API statistik interval dan validasi kelengkapan
+    calendar.ts                    # Konversi kalender/timezone ke batas UTC
+    quality.ts                     # Umur telemetry dan agregasi KPI dengan cakupan
     api.ts                         # Layanan halaman awal
   index.css                        # Tema dan layout responsif
 public/
@@ -221,8 +270,14 @@ menggunakan `PortfolioDashboard.tsx`.
 | `npm.cmd run build` | Pemeriksaan TypeScript dan build produksi ke dist/ |
 | `npm.cmd run preview` | Menjalankan preview hasil build produksi |
 | `npm.cmd run lint` | Pemeriksaan source dengan Oxlint |
+| `npm.cmd test` | Pengujian rentang statistik, kontrak API, freshness, dan cakupan KPI |
 
-Build terakhir berhasil. Verifikasi browser desktop 1680x952 dan mobile 390x844
+Pengujian otomatis menggunakan test runner bawaan Node.js pada runtime Node 24.
+Kasus mencakup batas kalender dan timezone, leap day/DST, kontrak statistik,
+partial/truncation, cancellation, nol vs missing, dan pengecualian telemetry
+lama/belum terverifikasi. Pengujian data langsung memerlukan backend dan database aktif.
+
+Build terakhir berhasil. Verifikasi browser sebelumnya pada desktop 1680x952 dan mobile 390x844
 mencakup filter, sorting, pagination, jumlah baris, ekspor CSV AG Grid, visibilitas
 kolom, panel detail, periode statistik, pilihan ranking, dan layout mobile.
 

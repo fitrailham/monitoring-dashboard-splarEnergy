@@ -2,9 +2,11 @@ import { useMemo } from "react";
 import type { AgPolarChartOptions } from "ag-charts-community";
 import { DashboardDonutChart } from "./AgDashboardChart";
 import type { Plant } from "../services/fleet";
-import { format, status, statusLabel } from "../services/fleet";
+import { format, number, status, statusLabel } from "../services/fleet";
 import { aggregateMetric, metricCoverageDetail, metricCoverageLabel, telemetryFreshness } from "../services/quality";
 import type { MetricSummary } from "../services/quality";
+import { summaryMetric } from "../services/portfolio";
+import type { PortfolioSummary } from "../services/portfolio";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -13,6 +15,7 @@ export interface AlarmSummary {
   counts: number[];
   coverage: number;
   totalPlants: number;
+  complete?: boolean;
 }
 function Donut({
   values,
@@ -125,21 +128,23 @@ export default function FleetSummary({
   onStats,
   onStatus,
   now,
+  summary,
 }: {
   plants: Plant[];
   alarms: AlarmSummary;
   onStats: () => void;
   onStatus: () => void;
   now: number;
+  summary?: PortfolioSummary | null;
 }) {
   const statuses = ["normal", "faulty", "disconnected", "unknown"] as const;
   const values = statuses.map(
-    (s) => plants.filter((p) => status(p) === s).length,
+    (s) => summary ? summary.plant_status[s] : plants.filter((p) => status(p) === s).length,
   );
-  const power = aggregateMetric(plants, "pv_power_kw", now),
-    yieldToday = aggregateMetric(plants, "yield_today_kwh", now),
-    capacity = aggregateMetric(plants, "capacity_kwp", now),
-    totalYield = aggregateMetric(plants, "total_yield_kwh", now);
+  const power = summaryMetric(summary, "current_power_kw", aggregateMetric(plants, "pv_power_kw", now), "pv_power_kw"),
+    yieldToday = summaryMetric(summary, "yield_today_kwh", aggregateMetric(plants, "yield_today_kwh", now)),
+    capacity = summaryMetric(summary, "installed_pv_capacity_kwp", aggregateMetric(plants, "capacity_kwp", now), "capacity_kwp"),
+    totalYield = summaryMetric(summary, "total_yield_kwh", aggregateMetric(plants, "total_yield_kwh", now));
   const freshness = plants.map((plant) => telemetryFreshness(plant, now));
   return (
     <section className="fleet-summary" aria-label="Fleet overview">
@@ -168,7 +173,7 @@ export default function FleetSummary({
             unit="MWh"
             coverage={yieldToday}
           />
-          <KPI icon="coins" label="Revenue today" value={null} unit="Rp" />
+          <KPI icon="coins" label="Revenue today" value={summary?.revenue?.status === "unconfigured" ? null : number(summary?.kpis.revenue_today_idr)} unit="Rp" />
           <KPI
             icon="panel"
             label="Installed PV capacity"
@@ -179,7 +184,7 @@ export default function FleetSummary({
           <KPI
             icon="battery"
             label="Rated ESS capacity"
-            value={null}
+            value={typeof summary?.kpis.ess_rated_capacity_kwh === "number" ? summary.kpis.ess_rated_capacity_kwh / 1000 : null}
             unit="MWh"
           />
           <KPI
@@ -202,7 +207,7 @@ export default function FleetSummary({
           <Donut
             values={values}
             colors={["#36bd3d", "#ff454d", "#a4adb5", "#4ba9e9"]}
-            total={plants.length}
+            total={summary?.total_plants ?? plants.length}
             label="Total plants"
           />
           <div className="donut-legend">
@@ -259,7 +264,7 @@ export default function FleetSummary({
             )}
             <p>
               {alarms.available
-                ? `Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS`
+                ? `Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS${alarms.complete === false ? " · parsial" : ""}`
                 : "Data alarm belum tersedia"}
             </p>
           </div>

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import type { Plant } from "../services/fleet";
-import { request } from "../services/fleet";
+import { getPowerStatistics } from "../services/analytics";
 import { calendarDate, validTimeZone } from "../services/calendar";
 import { statisticsRange } from "../services/statistics";
 import type { ChartPoint, Period } from "../services/statistics";
 import { getYieldStatistics } from "../services/yieldStatistics";
 import type { YieldResult } from "../services/yieldStatistics";
-import { powerTimeline, trendCsv } from "../services/monitoring";
-import type { PowerPoint, PowerSample } from "../services/monitoring";
+import { trendCsv } from "../services/monitoring";
+import type { PowerPoint } from "../services/monitoring";
 import MonitoringLineChart from "./MonitoringLineChart";
 import { DashboardBarChart } from "./AgDashboardChart";
 import Icon from "./Icon";
@@ -26,7 +26,7 @@ const TEMPLATES: { name: string; description: string; series: SeriesKey[] }[] = 
   { name: "PV Performance", description: "Fokus pada kurva daya produksi PV.", series: ["pv"] },
   { name: "Grid & Load", description: "Bandingkan daya jaringan dan daya beban.", series: ["grid", "load"] },
 ];
-interface TrendResponse { key: string; power: PowerPoint[]; energy: YieldResult | null; error: string }
+interface TrendResponse { key: string; power: PowerPoint[]; energy: YieldResult | null; error: string; complete?: boolean }
 
 export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Plant; now: number; refreshKey: number }) {
   const zone = validTimeZone(plant?.time_zone), code = plant?.plant_code ?? "";
@@ -48,15 +48,14 @@ export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Pl
     const controller = new AbortController();
     void (async () => {
       try {
-        let power: PowerPoint[] = [], energy: YieldResult | null = null;
+        let power: PowerPoint[] = [], energy: YieldResult | null = null, complete = true;
         if (period === "Day") {
-          const result = await request<PowerSample[]>(`/api/database/history/${encodeURIComponent(code)}?limit=500`, controller.signal);
-          if (!Array.isArray(result.data)) throw new Error("Format riwayat daya tidak valid.");
-          power = powerTimeline(result.data, date, zone);
+          const result = await getPowerStatistics(code, statisticsRange("Day", date, zone), controller.signal);
+          power = result.points; complete = result.complete;
         } else {
           energy = await getYieldStatistics(code, statisticsRange(period, date, zone, new Date(refreshKey || mountedAt)), controller.signal);
         }
-        if (!controller.signal.aborted) setResponse({ key, power, energy, error: "" });
+        if (!controller.signal.aborted) setResponse({ key, power, energy, error: "", complete });
       } catch (error) {
         if (!controller.signal.aborted) setResponse({ key, power: [], energy: null, error: error instanceof Error ? error.message : "Gagal mengambil data trend." });
       }
@@ -95,11 +94,11 @@ export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Pl
   function download() {
     if (!plant || !hasData || loading || !active) return;
     const rows: (string | number | null)[][] = period === "Day" ? [
-      ["plant_code", "plant_name", "local_date", "time_zone", "interval", ...enabled.map((series) => `${series}_power_kw`), "quality"],
+      ["plant_code", "plant_name", "local_date", "time_zone", "interval", "start_at", "end_at", ...enabled.map((series) => `${series}_power_kw`), "quality", "field_quality"],
       ...power.map((point) => {
         const values = enabled.map((series) => point[series]);
-        return [code, plant.plant_name, date, zone, point.label, ...values,
-          values.every((value) => value === null) ? "missing" : values.some((value) => value === null) ? "partial" : "measured"];
+        return [code, plant.plant_name, date, zone, point.label, point.startAt ?? null, point.endAt ?? null, ...values,
+          point.quality ?? (values.every((value) => value === null) ? "missing" : "partial"), JSON.stringify(point.fieldQuality ?? {})];
       }),
     ] : [
       ["plant_code", "plant_name", "period", "selected_date", "time_zone", "bucket", "pv_energy_kwh", "quality", "complete_period"],
@@ -126,7 +125,8 @@ export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Pl
     <div className="trend-chart-stage" aria-busy={loading}>{period === "Day" ? <MonitoringLineChart options={lineOptions} /> : <DashboardBarChart options={barOptions} />}
       {(!hasData || loading || active?.error) && <div className="trend-chart-overlay"><Icon name={loading ? "refresh" : "chart"} size={34} /><strong>{loading ? "Memuat data trend…" : active?.error ? "Data trend belum dapat dimuat" : "Belum ada data pengukuran terverifikasi"}</strong><p>{active?.error || (code ? "Periksa periode atau pilih PLTS lain." : "Buka daftar PLTS dengan tombol di sisi kiri.")}</p>{active?.error && <button onClick={() => setRetry((value) => value + 1)}>Coba lagi</button>}</div>}
     </div>
-    <p className="trend-data-note">{zone} · {period === "Day" ? "Daya dari pembacaan terakhir per 5 menit; hingga 500 sampel terbaru. Gap tidak diinterpolasi. Tanggal di luar riwayat memerlukan API daya berbasis rentang." : "Energi interval PV untuk seluruh rentang pilihan; periode tanpa data dibiarkan kosong."}</p>
+    <p className="trend-data-note">{zone} · {period === "Day" ? "Daya dari API rentang tanggal, pembacaan terakhir per 5 menit. Gap tidak diinterpolasi; tanda jaringan mengikuti verifikasi backend." : "Energi interval PV untuk seluruh rentang pilihan; periode tanpa data dibiarkan kosong."}</p>
+    {period === "Day" && active?.complete === false && <p className="trend-partial-note" role="status">Cakupan daya masih parsial; kualitas diperiksa per metrik dan data kosong tidak diubah menjadi nol.</p>}
     {active?.energy && !active.energy.complete && <p className="trend-partial-note" role="status">Data parsial: {active.energy.completeBuckets}/{active.energy.elapsedBuckets} interval lengkap.{active.energy.truncated ? " Backend belum mengembalikan seluruh rentang." : ""}</p>}
   </section>
     <dialog ref={templates} className="layout-dialog trend-template-dialog" aria-labelledby="trend-templates-title" onCancel={() => setTemplatesOpen(false)}><div className="layout-dialog-heading"><h2 id="trend-templates-title">Trend Templates</h2><button aria-label="Tutup Templates" onClick={() => setTemplatesOpen(false)}><Icon name="close" size={18} /></button></div><p>Pilih konfigurasi seri daya harian untuk PLTS yang aktif.</p><div className="trend-template-list">{TEMPLATES.map((template) => <button key={template.name} onClick={() => { setEnabled([...template.series]); setPeriod("Day"); setMode(template.name === "Energy Overview" ? "energy" : "custom"); setTemplatesOpen(false); }}><Icon name="chart" size={22} /><span><strong>{template.name}</strong><small>{template.description}</small></span><Icon name="chevron" size={15} /></button>)}</div><footer><button onClick={() => setTemplatesOpen(false)}>Cancel</button></footer></dialog>

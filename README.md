@@ -96,12 +96,13 @@ Ikon Home dan logo membuka Dashboard; Plants membuka List View.
 - Peta Indonesia dengan marker status PLTS, pencarian, dan akses panel detail.
 - Tampilan monitoring gelap dengan panel di sisi kiri/kanan dan ringkasan portofolio.
 - Grafik daya harian dan energi bulanan mengikuti PLTS yang dipilih pada kontrol
-  Grafik PLTS. Grafik daya memakai hingga 500 sampel history hari ini dengan waktu
-  pengukuran terverifikasi; gap lebih dari 30 menit tidak dihubungkan.
+  Grafik PLTS. Grafik daya memakai `power-statistics` berdasarkan tanggal dengan
+  bucket lima menit, waktu/kualitas terverifikasi, dan gap yang tidak diinterpolasi.
 - Grafik bulanan memakai statistik energi interval tanpa batas 500 rekaman.
 - Ranking total yield memakai nilai overview terverifikasi; alarm menampilkan
   jumlah dan cakupan yang tersedia. Ringkasan KPI mengikuti aturan freshness/cakupan.
-- Panel O&M dan manfaat lingkungan menampilkan -- sampai data/metode tersedia.
+- KPI, alarm, revenue, kapasitas ESS, dan manfaat lingkungan memakai summary backend.
+  Data unconfigured tetap --. Panel O&M menunggu sumber work order.
 - Layout berubah menjadi peta di atas dan panel bertumpuk pada layar kecil.
 
 ### Monitoring
@@ -112,9 +113,8 @@ per PLTS, Energy Trend, dan tempat grafik Revenue Trend. Daftar PLTS bisa diciut
 dan workspace mendukung mode layar penuh. Tab Trend, Alarms, dan Report Management
 masing-masing membuka halaman tersendiri di dalam Monitoring.
 
-Grafik Day menampilkan pembacaan daya terakhir per jam dari hingga 500 sampel
-history dengan waktu terverifikasi; hari lama di luar riwayat ini memerlukan
-endpoint daya berdasarkan rentang. Total energi dan grafik Month/Year/Lifetime
+Grafik Day menampilkan pembacaan daya terakhir per jam dari API rentang tanggal,
+dengan coverage per metrik serta verifikasi tanda grid/baterai. Total energi dan grafik Month/Year/Lifetime
 tetap memakai endpoint agregasi energi berdasarkan rentang, dengan penanda parsial.
 Pendapatan historis, cuaca, manfaat lingkungan, dan energi impor/pemakaian sendiri
 tidak dihitung dari asumsi. Bagian terkait menampilkan keterangan belum tersedia.
@@ -188,9 +188,12 @@ jumlah optimizer tidak digunakan untuk membuat perangkat simulasi.
 
 Export Basic Info mengunduh perangkat terpilih, atau seluruh hasil filter bila
 tidak ada pilihan. Batch Rename dan ikon edit menyiapkan **draf CSV nama baru**
-tanpa mengubah nama pada backend/perangkat. API saat ini hanya menyediakan GET
-inventory; Set Parameters dan Export Performance Data dinonaktifkan sampai
-tersedia dukungan backend yang sesuai.
+tanpa mengubah nama pada backend/perangkat. Set Parameters masih dinonaktifkan.
+Export Performance Data aktif setelah satu perangkat dipilih; dialog menerima
+tanggal awal/akhir maksimum 31 hari dalam timezone PLTS, mengikuti seluruh halaman
+`GET /api/devices/{device_id}/history` dengan scope `plant_code`. ID yang dikirim
+adalah ID vendor, bukan ID baris lokal. CSV menyertakan waktu, kualitas per field,
+dan konvensi arah daya; nilai belum terverifikasi dikosongkan.
 
 #### Report Management
 
@@ -202,12 +205,14 @@ PLTS. Interval pending tidak ditampilkan, missing tetap --, dan nol terukur teta
 
 Kolom tabel dapat ditampilkan/disembunyikan, diurutkan, dan dipaginasi 10/20/50
 baris. Export CSV mencakup seluruh halaman hasil pengurutan, scope PLTS, timezone,
-kualitas bucket, dan kelengkapan periode. Inverter Yield, Export energy, serta
-Revenue belum tersedia dari endpoint statistik PV dan tidak dihitung dari asumsi.
+kualitas bucket, dan kelengkapan periode. Inverter Yield memakai laporan perangkat,
+terpisah dari PV Yield. Export energy dan Revenue tetap -- sampai sumbernya tersedia.
 
 Inverter Report membaca inventory inverter yang dinormalisasi dari
-`GET /api/devices/{plant_code}`, namun tetap menampilkan keadaan kosong sampai
-endpoint laporan per inverter tersedia. Subscribe membuka penjelasan ketersediaan
+`GET /api/devices/{plant_code}` dan data dari `GET /api/reports/inverters`. Seluruh
+halaman dimuat sebelum sorting/export (maksimum 50000 baris), dengan identitas
+inverter/SN, total sebelum pagination dan penanda parsial. Plant Report menggabungkan
+yield inverter per interval tanpa mengganti energi PV. Subscribe membuka penjelasan ketersediaan
 fitur; tidak membuat jadwal atau mengirim laporan karena backend belum menyediakan
 endpoint langganan.
 
@@ -218,10 +223,10 @@ dan Custom, Templates, pilihan Day/Month/Year/Lifecycle, tanggal, dan Export CSV
 Custom memilih seri PV output, Power from grid, dan Consumed by appliances.
 Templates menyediakan konfigurasi Energy Overview, PV Performance, dan Grid & Load.
 
-Day menampilkan pembacaan daya terverifikasi terakhir per interval lima menit dari
-hingga 500 rekaman history terbaru, mengikuti timezone PLTS. Nilai jaringan/beban
-mempertahankan tanda dari sumber; gap tetap null dan tidak diinterpolasi. Riwayat
-daya di luar rekaman yang diterima memerlukan dukungan API rentang waktu.
+Day menampilkan pembacaan daya terakhir per lima menit dari `power-statistics`
+untuk tanggal yang dipilih, mengikuti timezone PLTS. Nilai jaringan/baterai yang
+arahnya belum terverifikasi tetap null. Coverage parsial diberi penanda dan gap
+tidak diinterpolasi. Tidak ada fallback ke 500 rekaman terbaru.
 Month/Year/Lifecycle memakai agregasi energi interval PV dari backend dan menandai
 hasil parsial. Lifecycle memakai grain year sejak arsip 1970 hingga tahun berjalan.
 
@@ -338,10 +343,16 @@ Dokumentasi Swagger: `http://127.0.0.1:8000/docs`.
 
 | Endpoint | Pemakaian frontend |
 | --- | --- |
-| `GET /api/database/overview` | Baris monitoring, KPI portofolio, dan ranking |
+| `GET /api/database/overview` | Baris monitoring, peta, dan fallback KPI jika summary gagal |
 | `GET /api/database/plants` | Metadata/alamat yang digabung berdasarkan plant_code |
 | `GET /api/database/yield-statistics?plant_code=...&from=...&to=...&grain=...&time_zone=...` | Statistik energi interval sesuai rentang pilihan |
-| `GET /api/database/history/{plant_code}?limit=500` | Sampel daya harian PLTS pilihan di Home; tidak dipakai menghitung total energi |
+| `GET /api/database/power-statistics` | Daya berdasarkan rentang/tanggal pada Home Dashboard, Monitoring Overview, dan Trend |
+| `GET /api/portfolio/summary` | KPI, status/alarm portofolio, kapasitas ESS, revenue dan manfaat lingkungan, dengan coverage |
+| `GET /api/database/rankings` | Ranking specific energy harian pada KPI View; ranking total yield Dashboard tetap dari overview karena endpoint ranking hanya menyediakan yield harian/specific energy |
+| `GET /api/reports/inverters` | Inverter Report dan kolom Inverter Yield pada Plant Report |
+| `GET /api/devices/{device_id}/history` | Export Performance Data dengan scope PLTS dan pagination |
+| `POST /api/database/plants` | Add Plant; token izin tulis dimasukkan saat menyimpan form |
+| `PATCH /api/database/plants/{plant_code}` | Edit Plant Metadata dari panel detail; hanya field master yang diizinkan BE |
 | `GET /api/alarms/{plant_code}?state=active|cleared` | Alarm aktif/historis PLTS dan metadata configured/quality/cakupan |
 | `GET /api/devices/{plant_code}` | Inventory Device Management dan pilihan inverter Report Management |
 
@@ -352,14 +363,15 @@ Satuan pada overview/statistik: daya kW, kapasitas PV kWp, yield/energi ESS kWh,
 dan SOC persen. Format MW/MWh/GWh diterapkan pada kartu yang sesuai.
 
 Overview dan metadata dimuat bersama. Portofolio diperbarui setiap lima menit;
-refresh manual tersedia. Permintaan alarm dibatasi empat PLTS sekaligus. Jika
+refresh manual tersedia. Alarm portofolio memakai summary sehingga tidak meminta
+alarm satu per satu ke seluruh PLTS. Jika
 pembaruan portofolio gagal, data terakhir tetap ditampilkan bersama pesan error.
 Label API synced adalah waktu frontend berhasil mengambil data. Umur telemetry
 dihitung terpisah dari timestamp pengukuran dan diperbarui setiap 30 detik.
 
 PLTS awal statistik mengikuti default pada source PortfolioDashboard jika kode
-tersebut ditemukan, atau memakai PLTS pertama. KPI masih dihitung dari seluruh
-overview di frontend, belum memakai endpoint summary BE. Tiap KPI menunjukkan
+tersebut ditemukan, atau memakai PLTS pertama. KPI memakai summary BE; jika gagal,
+ringkasan overview ditampilkan dengan pesan fallback dan alarm tidak diklaim nol. Tiap KPI menunjukkan
 jumlah PLTS valid dibanding PLTS relevan, dengan rincian kosong/lama/belum
 terverifikasi melalui tooltip. PLTS demo dan metrik tidak relevan dikecualikan.
 
@@ -380,15 +392,17 @@ Nilai parsial diberi label; jika tidak ada nilai valid, KPI menampilkan --, buka
 - Alarm dengan configured false atau tanpa cakupan data ditampilkan --, bukan
   dianggap nol alarm yang sudah terverifikasi.
 - Kapasitas PV 0/null tidak dipakai untuk pembagian specific energy dan ranking.
-- Lokasi, jenis perangkat, serial, dan optimizer perlu dipetakan ke API/komponen
-  frontend yang memerlukannya. Inventory perangkat belum dipakai untuk peta aktif.
-- Revenue, kapasitas ESS terpasang, dan indikator lingkungan masih placeholder.
-  Kolom optimizer belum dihubungkan dengan inventory.
+- Lokasi/country/region, has_pv/has_ess, foto, dan jumlah optimizer memakai metadata
+  backend; firmware dan superior equipment memakai inventory perangkat.
+- Revenue, kapasitas ESS terpasang, dan indikator lingkungan mengikuti summary;
+  backend yang mengembalikan unconfigured/null tetap ditampilkan --.
 - Kartu Installed PV capacity memakai kapasitas panel DC; belum sama dengan kartu
   Inverter rated power AC pada referensi. Kolom tanggal grid connection dan PR
   belum tersedia pada tabel aktif.
-- Thumbnail panel surya adalah ilustrasi, bukan foto lokasi.
-- Add Plant dinonaktifkan sampai BE menyediakan operasi penambahan PLTS.
+- Thumbnail dan panel detail memakai image_url, dengan ilustrasi sebagai fallback.
+- Add Plant dan Edit Plant Metadata sudah terhubung ke BE. Backend membutuhkan
+  PLANT_WRITE_TOKEN yang dikonfigurasi administrator; masukkan token pada form,
+  jangan dalam VITE_* atau localStorage. Token hanya disimpan di memori selama form terbuka.
   Business Operation/SmartDesign belum diimplementasikan; label akun hanya tampilan.
 
 Data sumber tidak diganti dengan data simulasi. Hasil audit backend aktual dan
@@ -401,10 +415,9 @@ metadata operasional disimpan lokal, tidak disertakan dalam repository public.
 - [Contoh kontrak JSON](docs/backend-api-contract.examples.json): contoh method,
   path, parameter/body, status HTTP, dan response. Seluruh nilai adalah fixture
   ilustratif, bukan data produksi.
-Endpoint summary portofolio, ranking server, alarm
-fleet, dan POST Add Plant pada dokumen tersebut adalah **usulan**. Frontend aktif
-masih menggunakan endpoint yang tercantum pada bagian API di atas, termasuk
-statistik energi interval. Ketersediaan data bergantung pada backend/database. Pemakaian AG
+Beberapa status usulan pada dokumen awal sudah diterapkan. Lihat
+[hasil integrasi Swagger](docs/backend-integration.md) dan daftar API aktif di atas.
+Ketersediaan data tetap bergantung pada collector/backend/database. Pemakaian AG
 Grid/AG Charts tidak mengharuskan BE mengirim konfigurasi chart; BE tetap mengirim
 data JSON dan konfigurasi visual dikelola frontend.
 

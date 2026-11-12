@@ -10,6 +10,11 @@ export interface PlantReportRow {
   exportEnergy: number | null;
   revenue: number | null;
   quality: ChartPoint["quality"];
+  deviceName?: string;
+  deviceId?: string;
+  deviceSn?: string | null;
+  reason?: string | null;
+  inverterQuality?: ChartPoint["quality"];
 }
 export type ReportColumn = "period" | "pvYield" | "inverterYield" | "exportEnergy" | "revenue";
 
@@ -33,5 +38,20 @@ export function sortReportRows(rows: PlantReportRow[], column: ReportColumn, dir
     if (left === null) return right === null ? 0 : 1;
     if (right === null) return -1;
     return (left - right) * (direction === "asc" ? 1 : -1) || a.timestamp - b.timestamp;
+  });
+}
+
+export function mergeInverterYield(rows: PlantReportRow[], inverters: PlantReportRow[]) {
+  const groups = new Map<number, PlantReportRow[]>();
+  for (const inverter of inverters) {
+    const group = groups.get(inverter.timestamp) ?? [];
+    group.push(inverter); groups.set(inverter.timestamp, group);
+  }
+  return rows.map((row) => {
+    const members = groups.get(row.timestamp) ?? [];
+    const values = members.flatMap((member) => member.inverterYield === null ? [] : [member.inverterYield]);
+    const complete = members.length > 0 && members.every((member) => member.inverterYield !== null && ["measured", "derived"].includes(member.quality));
+    return {...row, inverterYield: values.length ? values.reduce((a, b) => a + b, 0) : null,
+      inverterQuality: !values.length ? "missing" as const : complete ? "derived" as const : "partial" as const};
   });
 }

@@ -118,12 +118,14 @@ export default function PlantTable({
   onSelect,
   onRefresh,
   now,
+  onAdd,
 }: {
   plants: Plant[];
   loading: boolean;
   onSelect: (plant: Plant) => void;
   onRefresh: () => void;
   now: number;
+  onAdd?: () => void;
 }) {
   const grid = useRef<AgGridReact<Plant>>(null);
   const [draft, setDraft] = useState(emptyFilters),
@@ -144,14 +146,14 @@ export default function PlantTable({
           (p.plant_name + " " + p.plant_code)
             .toLowerCase()
             .includes(filters.name.toLowerCase().trim()) &&
-          ((p.address ?? "") + " Indonesia")
+          ([p.address, p.country_name, p.country_code, p.region, p.city].filter(Boolean).join(" "))
             .toLowerCase()
             .includes(filters.region.toLowerCase().trim()) &&
           (!filters.state || status(p) === filters.state) &&
           (!filters.type ||
             (filters.type === "pv"
-              ? number(p.capacity_kwp) !== null
-              : number(p.battery_soc_percent) !== null)),
+              ? p.has_pv ?? (number(p.capacity_kwp) !== null)
+              : p.has_ess ?? (number(p.battery_soc_percent) !== null))),
       ),
     [plants, filters],
   );
@@ -215,11 +217,12 @@ export default function PlantTable({
         floatingFilter: false,
         suppressSizeToFit: true,
         cellClass: "plant-image-cell",
-        cellRenderer: () => (
+        cellRenderer: ({ data }: ICellRendererParams<Plant>) => (
           <img
             className="plant-thumbnail"
-            src="/solar-plant.svg"
-            alt="Ilustrasi panel surya"
+            src={data?.image_url || "/solar-plant.svg"}
+            onError={(event) => { if (!event.currentTarget.src.endsWith("/solar-plant.svg")) event.currentTarget.src = "/solar-plant.svg"; }}
+            alt={data?.image_url ? `Foto ${data.plant_name}` : "Ilustrasi panel surya"}
           />
         ),
       },
@@ -245,7 +248,7 @@ export default function PlantTable({
         headerName: "Country/Region",
         width: 175,
         minWidth: 165,
-        valueGetter: () => "Indonesia",
+        valueGetter: ({ data }) => data?.country_name ?? data?.country_code ?? "--",
       },
       {
         field: "address",
@@ -277,8 +280,9 @@ export default function PlantTable({
         sortable: false,
         cellDataType: "number",
         filter: "agNumberColumnFilter",
-        valueGetter: () => null,
-        valueFormatter: () => "--",
+        valueGetter: ({ data }) => data?.optimizer_quantity ?? null,
+        valueFormatter: ({ value }) => format(value, 0),
+        tooltip: ({ data }) => data?.optimizer_quantity_complete === false ? "Jumlah optimizer masih parsial" : "Jumlah optimizer dari inventory",
       },
       {
         ...numeric("battery_soc_percent", "Battery SOC (%)", 125, 1),
@@ -352,7 +356,7 @@ export default function PlantTable({
           >
             <option value="">All</option>
             <option value="pv">PV</option>
-            <option value="ess">ESS with SOC data</option>
+            <option value="ess">ESS installed</option>
           </select>
         </label>
         <button
@@ -431,8 +435,9 @@ export default function PlantTable({
           <button
             type="button"
             className="primary"
-            disabled
-            title="Endpoint penambahan PLTS belum tersedia pada backend"
+            disabled={!onAdd}
+            onClick={onAdd}
+            title="Daftarkan PLTS pada sistem monitoring lokal"
           >
             Add Plant
           </button>

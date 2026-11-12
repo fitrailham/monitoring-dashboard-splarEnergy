@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Plant } from "../services/fleet";
-import { format, number, request } from "../services/fleet";
+import { format, number } from "../services/fleet";
+import { summaryMetric } from "../services/portfolio";
+import type { PortfolioSummary } from "../services/portfolio";
+import { getPowerStatistics } from "../services/analytics";
 import { aggregateMetric, metricCoverageLabel, telemetryFreshness } from "../services/quality";
 import { calendarDate, validTimeZone } from "../services/calendar";
 import { statisticsRange } from "../services/statistics";
@@ -13,13 +16,6 @@ import Icon from "./Icon";
 import type { IconName } from "./Icon";
 
 type Point = { label: string; value: number | null; x: number };
-interface PowerRow {
-  recorded_at: string;
-  measured_at?: string;
-  measurement_time_verified?: boolean;
-  timestamp_source?: string;
-  pv_power_kw: number | string | null;
-}
 
 function Panel({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
   return <section className="command-panel">
@@ -59,8 +55,8 @@ function MiniChart({ points, bars, unit }: { points: Point[]; bars?: boolean; un
   </svg>;
 }
 
-export default function HomeOverview({ plants, alarms, now, selected, onChange, onSelect, refreshKey }: {
-  plants: Plant[]; alarms: AlarmSummary; now: number; selected: string;
+export default function HomeOverview({ plants, alarms, summary, now, selected, onChange, onSelect, refreshKey }: {
+  plants: Plant[]; alarms: AlarmSummary; summary?: PortfolioSummary | null; now: number; selected: string;
   onChange: (code: string) => void; onSelect: (plant: Plant) => void; refreshKey: number;
 }) {
   const [query, setQuery] = useState("");
@@ -68,39 +64,33 @@ export default function HomeOverview({ plants, alarms, now, selected, onChange, 
   const zone = validTimeZone(plant?.time_zone);
   const today = calendarDate(now, zone);
   const key = JSON.stringify([selected, today, zone, refreshKey]);
-  const [history, setHistory] = useState<{ key: string; power: Point[]; month: YieldResult | null; errors: string[] } | null>(null);
+  const [history, setHistory] = useState<{ key: string; power: Point[]; powerComplete: boolean; month: YieldResult | null; errors: string[] } | null>(null);
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
     void Promise.allSettled([
-      request<PowerRow[]>(`/api/database/history/${encodeURIComponent(selected)}?limit=500`, controller.signal),
+      getPowerStatistics(selected, statisticsRange("Day", today, zone), controller.signal),
       getYieldStatistics(selected, statisticsRange("Month", today, zone), controller.signal),
     ]).then(([powerResponse, monthResponse]) => {
       if (controller.signal.aborted) return;
       const errors: string[] = [];
       let power: Point[] = [];
-      if (powerResponse.status === "fulfilled" && Array.isArray(powerResponse.value.data)) {
-        power = powerResponse.value.data.flatMap((row) => {
-          const time = row.measured_at ?? row.recorded_at;
-          if (!row.measurement_time_verified || (row.timestamp_source === "collector" && !row.measured_at) ||
-              !/(?:Z|[+-]\d{2}:\d{2})$/i.test(time) || !Number.isFinite(Date.parse(time)) || calendarDate(time, zone) !== today) return [];
-          const parts = new Intl.DateTimeFormat("en-GB", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(time));
-          const [hour, minute] = parts.split(":").map(Number);
-          const value = number(row.pv_power_kw);
-          return [{ label: parts, value: value === null ? null : value / 1000, x: (hour * 60 + minute) / 1440 }];
-        }).sort((a, b) => a.x - b.x);
+      if (powerResponse.status === "fulfilled") {
+        power = powerResponse.value.points.map((point, index, points) => ({
+          label: point.label, value: point.pv === null ? null : point.pv / 1000, x: index / Math.max(1, points.length),
+        }));
       } else errors.push("Riwayat daya belum dapat dimuat.");
       if (monthResponse.status === "rejected") errors.push("Yield bulanan belum dapat dimuat.");
-      setHistory({ key, power, month: monthResponse.status === "fulfilled" ? monthResponse.value : null, errors });
+      setHistory({ key, power, powerComplete: powerResponse.status === "fulfilled" && powerResponse.value.complete, month: monthResponse.status === "fulfilled" ? monthResponse.value : null, errors });
     });
     return () => controller.abort();
   }, [selected, today, zone, key]);
   const active = history?.key === key ? history : null;
   const matches = useMemo(() => plants.filter((item) => `${item.plant_name} ${item.plant_code} ${item.address ?? ""}`.toLowerCase().includes(query.trim().toLowerCase())), [plants, query]);
-  const power = aggregateMetric(plants, "pv_power_kw", now);
-  const total = aggregateMetric(plants, "total_yield_kwh", now);
-  const capacity = aggregateMetric(plants, "capacity_kwp", now);
-  const yieldToday = aggregateMetric(plants, "yield_today_kwh", now);
+  const power = summaryMetric(summary, "current_power_kw", aggregateMetric(plants, "pv_power_kw", now), "pv_power_kw");
+  const total = summaryMetric(summary, "total_yield_kwh", aggregateMetric(plants, "total_yield_kwh", now));
+  const capacity = summaryMetric(summary, "installed_pv_capacity_kwp", aggregateMetric(plants, "capacity_kwp", now), "capacity_kwp");
+  const yieldToday = summaryMetric(summary, "yield_today_kwh", aggregateMetric(plants, "yield_today_kwh", now));
   const ranking = plants.flatMap((item) => {
     const metric = aggregateMetric([item], "total_yield_kwh", now);
     return metric.value === null ? [] : [{ plant: item, value: metric.value / 1e6 }];
@@ -131,7 +121,7 @@ export default function HomeOverview({ plants, alarms, now, selected, onChange, 
       <Panel title="Real-Time Power" icon="bolt">
         <div className="command-panel-metric"><span>Current power</span><strong>{format(plant && telemetryFreshness(plant, now).state === "fresh" ? number(plant.pv_power_kw) === null ? null : number(plant.pv_power_kw)! / 1000 : null)}</strong><small>MW</small></div>
         <MiniChart points={active?.power ?? []} unit="MW" />
-        <p className="command-note">PLTS pilihan · {zone} · hingga 500 sampel terverifikasi hari ini</p>
+        <p className="command-note">PLTS pilihan · {zone} · daya per 5 menit dari API rentang tanggal{active?.powerComplete === false ? " (parsial)" : ""}</p>
       </Panel>
       <Panel title="Yield This Month" icon="sun">
         <div className="command-panel-metric"><span>Yield this month</span><strong>{format(monthTotal)}</strong><small>MWh</small></div>
@@ -140,9 +130,11 @@ export default function HomeOverview({ plants, alarms, now, selected, onChange, 
       </Panel>
       <Panel title="Environmental Benefits" icon="tree">
         <div className="command-benefits">{([
-          ["coal", "Standard coal saved", "tons"], ["cloud", "CO₂ avoided", "tons"], ["tree", "Equivalent trees", "trees"],
-        ] as [IconName, string, string][]).map(([icon, label, unit]) => <div key={icon}><Icon name={icon} size={48} /><strong>--</strong><span>{label}</span><small>{unit}</small></div>)}</div>
-        <p className="command-note">Faktor dan data lingkungan belum tersedia.</p>
+          ["coal", "Standard coal saved", "tons", number(summary?.environmental_benefits?.coal_saved_kg)],
+          ["cloud", "CO₂ avoided", "tons", number(summary?.environmental_benefits?.co2_avoided_kg)],
+          ["tree", "Equivalent trees", "tree-years", number(summary?.environmental_benefits?.equivalent_tree_years)],
+        ] as [IconName, string, string, number | null][]).map(([icon, label, unit, value]) => <div key={icon}><Icon name={icon} size={48} /><strong>{summary?.environmental_benefits?.status === "unconfigured" ? "--" : format(value === null ? null : icon === "tree" ? value : value / 1000)}</strong><span>{label}</span><small>{unit}</small></div>)}</div>
+        <p className="command-note">{summary?.environmental_benefits?.reason || "Manfaat lingkungan portofolio berdasarkan metode dan faktor backend."}</p>
       </Panel>
     </aside>
     <div className="command-center-info"><label>Grafik PLTS<select aria-label="PLTS untuk grafik Dashboard" value={selected} onChange={(event) => onChange(event.target.value)}>{!plants.length && <option value="">Belum ada PLTS</option>}{plants.map((item) => <option key={item.plant_code} value={item.plant_code}>{item.plant_name}</option>)}</select></label>
@@ -156,14 +148,14 @@ export default function HomeOverview({ plants, alarms, now, selected, onChange, 
         <p className="command-note">{metricCoverageLabel(total)}</p>
       </Panel>
       <Panel title="O&M Statistics" icon="settings"><div className="command-ring-layout"><div className="command-ring"><strong>--</strong></div><div className="command-operation-legend">{["To be approved", "To be dispatched", "Discarded", "Ended", "Ongoing"].map((label, index) => <span key={label}><i style={{ background: ["#2dcc54", "#ff8652", "#9cdbff", "#6e98ef", "#d465d6"][index] }} />{label}<b>--</b></span>)}</div></div><p className="command-note">Data work order O&M belum tersedia.</p></Panel>
-      <Panel title="Active Alarms" icon="bell"><div className="command-panel-metric"><span>Total alarms</span><strong>{alarmTotal ?? "--"}</strong></div><div className="command-ring-layout"><div className="command-ring" style={{ background: alarmTotal ? `conic-gradient(${sectors.join(",")})` : undefined }}><strong>{alarmTotal ?? "--"}</strong></div><div className="command-operation-legend">{["Critical", "Major", "Minor", "Warning", "Unclassified"].map((label, index) => <span key={label}><i style={{ background: alarmColors[index] }} />{label}<b>{alarms.available ? alarms.counts[index] : "--"}</b></span>)}</div></div><p className="command-note">{alarms.available ? `Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS` : "Data alarm belum tersedia"}</p></Panel>
+      <Panel title="Active Alarms" icon="bell"><div className="command-panel-metric"><span>Total alarms</span><strong>{alarmTotal ?? "--"}</strong></div><div className="command-ring-layout"><div className="command-ring" style={{ background: alarmTotal ? `conic-gradient(${sectors.join(",")})` : undefined }}><strong>{alarmTotal ?? "--"}</strong></div><div className="command-operation-legend">{["Critical", "Major", "Minor", "Warning", "Unclassified"].map((label, index) => <span key={label}><i style={{ background: alarmColors[index] }} />{label}<b>{alarms.available ? alarms.counts[index] : "--"}</b></span>)}</div></div><p className="command-note">{alarms.available ? `Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS${alarms.complete === false ? " \u00b7 parsial" : ""}` : "Data alarm belum tersedia"}</p></Panel>
     </aside>
     <footer className="command-bottom"><strong>IconGreenTWH<small>PORTFOLIO OVERVIEW</small></strong>{[
       ["Installed PV capacity", capacity.value === null ? null : capacity.value / 1000, "MWp", capacity],
       ["Current power", power.value === null ? null : power.value / 1000, "MW", power],
       ["Yield today", yieldToday.value === null ? null : yieldToday.value / 1000, "MWh", yieldToday],
     ].map(([label, value, unit, metric]) => <div key={String(label)}><span>{String(label)}</span><strong>{format(value as number | null)}<small>{String(unit)}</small></strong><small>{metricCoverageLabel(metric as typeof power)}</small></div>)}
-      <div><span>Revenue today</span><strong>--<small>Rp</small></strong><small>Data belum tersedia</small></div>
+      <div><span>Revenue today</span><strong>{summary?.revenue?.status === "unconfigured" ? "--" : format(number(summary?.kpis.revenue_today_idr))}<small>Rp</small></strong><small>{summary?.revenue?.reason || "Summary portofolio"}</small></div>
     </footer>
   </section>;
 }

@@ -25,6 +25,15 @@ export interface Plant {
   is_demo?: boolean;
   time_zone?: string;
   has_pv?: boolean;
+  has_ess?: boolean;
+  country_code?: string | null;
+  country_name?: string | null;
+  region?: string | null;
+  city?: string | null;
+  image_url?: string | null;
+  optimizer_quantity?: number | null;
+  optimizer_quantity_complete?: boolean;
+  ess_rated_capacity_kwh?: Numeric;
   inverter_rated_power_kw?: Numeric;
   revenue_today_idr?: Numeric;
   measured_at?: string | null;
@@ -40,13 +49,14 @@ export interface Plant {
     field_quality?: Record<string, string>;
   };
 }
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
   detail?: string;
   configured?: boolean;
-  meta?: { is_partial?: boolean; warnings?: string[] };
+  total?: number;
+  meta?: { is_partial?: boolean; warnings?: string[]; page?: number | null; total_pages?: number | null; snapshot_id?: string; generated_at?: string; date?: string | null; time_zone?: string | null };
 }
 export class ApiError extends Error {
   status: number;
@@ -70,10 +80,12 @@ export function number(value: Numeric | undefined): number | null {
 export async function request<T>(
   path: string,
   signal?: AbortSignal,
+  options?: { method: "POST" | "PATCH"; body: unknown; token: string },
 ): Promise<ApiResponse<T>> {
   let response: Response;
   try {
     response = await fetch(API_BASE + path, {
+      ...(options ? {method: options.method, headers: {"Content-Type": "application/json", Authorization: `Bearer ${options.token}`}, body: JSON.stringify(options.body)} : {}),
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
         : AbortSignal.timeout(15000),

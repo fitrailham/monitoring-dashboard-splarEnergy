@@ -15,6 +15,11 @@ export interface PowerPoint {
   pv: number | null;
   grid: number | null;
   load: number | null;
+  battery?: number | null;
+  startAt?: string;
+  endAt?: string;
+  quality?: "measured" | "derived" | "partial" | "missing" | "pending";
+  fieldQuality?: Record<string, string>;
 }
 export function hourlyPower(rows: PowerSample[], date: string, zone: string): PowerPoint[] {
   return powerTimeline(rows, date, zone, 60);

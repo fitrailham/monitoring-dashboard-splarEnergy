@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { format, jakartaDate, specific } from "../services/fleet";
+import { format, jakartaDate, number } from "../services/fleet";
 import type { Plant } from "../services/fleet";
 import { statisticsRange } from "../services/statistics";
 import type { ChartPoint, Period } from "../services/statistics";
 import { calendarDate, validTimeZone } from "../services/calendar";
 import { getYieldStatistics } from "../services/yieldStatistics";
 import type { YieldResult } from "../services/yieldStatistics";
+import { getRankings } from "../services/portfolio";
+import type { PortfolioSummary, Ranking } from "../services/portfolio";
 import Icon from "./Icon";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import { DashboardBarChart } from "./AgDashboardChart";
@@ -117,26 +119,20 @@ function YieldChart({
     </div>
   );
 }
-function RankingChart({
-  plants,
-  onChange,
-}: {
-  plants: Plant[];
-  onChange: (code: string) => void;
+function RankingChart({ onChange, zone, refreshKey }: {
+  onChange: (code: string) => void; zone: string; refreshKey: number;
 }) {
-  const data = useMemo(
-    () =>
-      [...plants]
-        .filter((p) => specific(p) !== null)
-        .sort((a, b) => specific(b)! - specific(a)!)
-        .slice(0, 5)
-        .map((p) => ({
-          plantName: p.plant_name,
-          plantCode: p.plant_code,
-          specific: specific(p)!,
-        })),
-    [plants],
-  );
+  const [mountedAt] = useState(Date.now);
+  const date = calendarDate(refreshKey || mountedAt, zone), key = JSON.stringify([date, zone, refreshKey]);
+  const [response, setResponse] = useState<{key: string; rows: Ranking[]; note: string} | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void getRankings(date, zone, controller.signal).then((result) => {
+      if (!controller.signal.aborted) setResponse({key, ...result});
+    }).catch((error) => { if (!controller.signal.aborted) setResponse({key, rows: [], note: error.message}); });
+    return () => controller.abort();
+  }, [date, zone, key]);
+  const data = useMemo(() => response?.key === key ? response.rows : [], [response, key]);
   const options = useMemo<AgCartesianChartOptions<(typeof data)[number]>>(
     () => ({
       data,
@@ -219,8 +215,10 @@ function RankingChart({
     <div
       className="ranking-chart ag-ranking-chart"
       aria-label="Peringkat specific energy PLTS"
+      title={response?.key === key ? response.note : "Memuat ranking backend…"}
     >
       <DashboardBarChart options={options} />
+      {response?.key === key && !data.length && <p className="chart-caption" role="status">Ranking belum memiliki data yang layak dibandingkan. {response.note}</p>}
       <div className="sr-only">
         <ol>
           {data.map((p) => (
@@ -241,11 +239,13 @@ export default function FleetStatistics({
   selected,
   onChange,
   refreshKey = 0,
+  summary,
 }: {
   plants: Plant[];
   selected: string;
   onChange: (code: string) => void;
   refreshKey?: number;
+  summary?: PortfolioSummary | null;
 }) {
   const timeZone = validTimeZone(plants.find((plant) => plant.plant_code === selected)?.time_zone);
   const [period, setPeriod] = useState<Period>("Day"),
@@ -405,7 +405,7 @@ export default function FleetStatistics({
           <h2>
             Today's Plant Ranking <span>(Specific Energy)</span>
           </h2>
-          <RankingChart plants={plants} onChange={onChange} />
+          <RankingChart onChange={onChange} zone={timeZone} refreshKey={refreshKey} />
         </article>
         <article className="white-panel benefits-panel">
           <h2>Environmental Benefits</h2>
@@ -416,24 +416,27 @@ export default function FleetStatistics({
                 label: "Standard coal saved",
                 unit: "tons",
                 color: "purple",
+                value: number(summary?.environmental_benefits?.coal_saved_kg),
               },
               {
                 icon: "cloud" as const,
                 label: "CO₂ avoided",
                 unit: "tons",
                 color: "blue",
+                value: number(summary?.environmental_benefits?.co2_avoided_kg),
               },
               {
                 icon: "tree" as const,
-                label: "Equivalent trees planted",
-                unit: "trees",
+                label: "Equivalent trees",
+                unit: "tree-years",
                 color: "green",
+                value: number(summary?.environmental_benefits?.equivalent_tree_years),
               },
             ].map((b) => (
               <div className={`benefit ${b.color}`} key={b.color}>
                 <Icon name={b.icon} size={34} />
                 <div>
-                  <strong>--</strong>
+                  <strong>{summary?.environmental_benefits?.status === "unconfigured" ? "--" : format(b.value === null ? null : b.icon === "tree" ? b.value : b.value / 1000)}</strong>
                   <small> {b.unit}</small>
                 </div>
                 <span>{b.label}</span>
@@ -441,7 +444,7 @@ export default function FleetStatistics({
             ))}
           </div>
           <p className="benefits-note">
-            Indikator lingkungan belum tersedia dari backend.
+            {summary?.environmental_benefits?.reason || "Indikator lingkungan portofolio dari summary backend."}
           </p>
         </article>
       </div>

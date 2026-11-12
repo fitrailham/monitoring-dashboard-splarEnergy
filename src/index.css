@@ -3246,6 +3246,10 @@ input::-webkit-inner-spin-button {
   width: 100%;
   min-width: 0;
 }
+.plant-admin-dialog { width: min(660px, calc(100vw - 32px)); }
+.plant-admin-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
+.plant-admin-dialog input[readonly] { background: #f5f7fa; color: #64748b; }
+@media (max-width: 540px) { .plant-admin-fields { grid-template-columns: 1fr; } }
 .plant-ag-grid .ag-cell {
   display: flex;
   align-items: center;

@@ -1,5 +1,9 @@
 # Daftar pekerjaan backend dan database
 
+> Setelah API backend baru tersedia, frontend sudah diintegrasikan. Lihat
+> [hasil integrasi Swagger](backend-integration.md) untuk pemakaian aktual,
+> hasil pengujian, dan fitur yang masih menunggu sumber data.
+
 Tanggal pemeriksaan: 12 November 2026.
 
 Dokumen ini berdasarkan kode frontend saat ini dan pemeriksaan GET `/openapi.json`
@@ -17,16 +21,19 @@ aktual. Tidak ada perubahan database atau request tulis ke backend dalam pemerik
 | --- | --- |
 | `GET /api/database/plants` | Master PLTS untuk Home dan pemilih PLTS Monitoring. Model sudah memuat koordinat, timezone, lokasi, foto, PV/ESS, kapasitas, optimizer, dan inventory. Verifikasi kelengkapan data sebenarnya. |
 | `GET /api/database/plants/{plant_code}` | Detail master PLTS. |
-| `POST /api/database/plants` | Pendaftaran PLTS sudah terdaftar. Tombol Add Plant frontend masih disabled; perlu integrasi form, izin, dan penanganan validasi. |
-| `PATCH /api/database/plants/{plant_code}` | Perubahan master PLTS sudah terdaftar. Periksa field yang diizinkan sebelum membuat form. |
+| `POST /api/database/plants` | Pendaftaran PLTS sudah terdaftar. Form Add Plant frontend sudah terhubung, dengan token izin tulis hanya di memori selama form terbuka. |
+| `PATCH /api/database/plants/{plant_code}` | Perubahan master PLTS sudah terdaftar. Form Edit Plant Metadata sudah terhubung dengan allowlist field sesuai PatchPlant. |
 | `GET /api/database/overview` | Snapshot daya, energi, status, dan kualitas data. Query sudah mendukung search, lokasi, tipe perangkat/SN, status, pagination, serta sort. Frontend masih memakai seluruh daftar dan filtering lokal. |
-| `GET /api/portfolio/summary` | KPI portofolio, status PLTS, alarm, coverage, revenue, dan environmental benefits. Frontend belum memakai endpoint ini untuk summary; sebagian masih menjumlahkan overview dan meminta alarm per PLTS. |
+| `GET /api/portfolio/summary` | KPI portofolio, status PLTS, alarm, coverage, revenue, dan environmental benefits. Frontend sudah memakai summary untuk KPI, status, alarm, ESS, revenue dan manfaat lingkungan; alarm tidak lagi diminta per PLTS. |
 | `GET /api/database/history/{plant_code}` | Riwayat mentah. Parameter yang terdaftar hanya `plant_code` dan `limit` maksimum 500. Belum cukup untuk grafik tanggal lama atau seluruh periode. |
 | `GET /api/database/yield-statistics` | Energi PV per interval. Query `plant_code`, `from`, `to`, `grain`, `time_zone`; dipakai grafik dan PV Yield pada Plant Report. Periksa counter reset, gap, dan coverage. |
-| `GET /api/database/rankings` | Ranking server sudah terdaftar. Frontend masih menghitung ranking lokal. Pastikan metric mencakup kebutuhan KPI View dan Dashboard; ranking total yield dan specific energy berbeda. |
-| `GET /api/devices/{plant_code}` | Inventory Device Management, pemilih inverter, dan metadata alarm. Perlu melengkapi `software_version`, `parent_device_id`, serta `parent_device_name` atau pemetaan parent; ketiganya belum tercantum dalam model Device yang diperiksa. |
+| `GET /api/database/rankings` | Ranking server sudah terdaftar. KPI View memakai ranking specific energy server; ranking total yield Dashboard tetap lokal karena metric lifetime belum tersedia. Pastikan metric mencakup kebutuhan KPI View dan Dashboard; ranking total yield dan specific energy berbeda. |
+| `GET /api/devices/{plant_code}` | Inventory sudah memuat firmware dan relasi parent; frontend memakai field tersebut bila tersedia. |
 | `GET /api/alarms` | Daftar alarm portofolio; query PLTS, severity, state, page, page_size sudah terdaftar. |
 | `GET /api/alarms/{plant_code}` | Alarm per PLTS, dipakai frontend. Lengkapi data sumber dan coverage, bukan hanya array kosong. |
+| `GET /api/database/power-statistics` | Sudah tersedia dan dipakai Dashboard, Overview dan Trend berdasarkan rentang tanggal. |
+| `GET /api/reports/inverters` | Sudah tersedia dan dipakai Inverter Report serta Inverter Yield pada Plant Report. |
+| `GET /api/devices/{device_id}/history` | Sudah tersedia dan dipakai Export Performance Data dengan scope PLTS. |
 
 Route pendukung `GET /api/dashboard/{plant_code}`, `/api/database/sync-logs`,
 `/api/database/test`, dan `/` juga terdaftar. Bukan kebutuhan endpoint baru untuk
@@ -37,6 +44,7 @@ Dokumen lama [analisis API](backend-api-analysis.md) dan
 semantik, tetapi beberapa status "usulan/belum tersedia" di sana sudah tertinggal
 dari Swagger saat pemeriksaan ini. Gunakan status di dokumen ini untuk perencanaan.
 
+
 ## 2. API yang belum terdaftar dan perlu dipertimbangkan
 
 Semua path pada bagian ini adalah **usulan**. Sepakati nama final dengan tim BE.
@@ -45,16 +53,13 @@ lanjutan, diaktifkan setelah cakupan bisnis dan sumber data disepakati.
 
 | Prioritas | Endpoint usulan | Kebutuhan |
 | --- | --- | --- |
-| P0 | `GET /api/database/power-statistics` | Grafik daya Home Dashboard, Monitoring Overview, dan Trend untuk tanggal/rentang tertentu. |
 | P1 | `GET /api/database/energy-statistics` | Energi PV, inverter, beban, impor, ekspor, serta pemakaian sendiri per interval dan total periode. Mengisi pembagian energi pada Overview. |
 | P1 | `GET /api/reports/plants` | Plant Report lengkap: PV Yield, Inverter Yield, Export, Revenue, kualitas, dan total sebelum pagination. Dapat memakai agregasi energi/revenue yang sama; tidak perlu mesin perhitungan terpisah. |
-| P1 | `GET /api/reports/inverters` | Inverter Report per perangkat, dengan filter PLTS, device_id, periode, dan grain. |
 | P1 | `GET /api/database/revenue-statistics` | Revenue Trend dan pendapatan periode, dengan komponen ekspor/penghematan dan versi tarif. |
 | P1 | `GET /api/database/cv-analysis` | Inverter/String Coefficient of Variation, cohort pembanding, mean, stddev, CV, deviation, dan coverage. Adapter frontend tersedia tetapi belum aktif tanpa konfigurasi path. |
 | P1 | `GET, POST /api/plants/{plant_code}/layouts` | Membaca dan membuat layout tersimpan di server. Saat ini layout hanya draf di localStorage browser. |
 | P1 | `GET, PATCH, DELETE /api/plants/{plant_code}/layouts/{layout_id}` | Detail, edit/rename, dan hapus layout dalam scope PLTS. Gunakan version/revision untuk mendeteksi edit bersamaan. |
 | P1 | `GET /api/plants/{plant_code}/layouts/{layout_id}/module-metrics` | Yield/status per modul sesuai tanggal, hanya jika modul/optimizer benar-benar mempunyai sumber telemetry. |
-| P1 | `GET /api/devices/{device_id}/history` | Riwayat performa inverter/perangkat dan Export Performance Data. |
 | P1 | `PATCH /api/devices/{device_id}` | Ubah nama tampilan perangkat. Sepakati apakah hanya nama lokal atau disinkronkan ke vendor. |
 | P1 | `POST /api/devices/batch-rename` | Batch Rename dengan daftar ID/nama baru dan hasil per perangkat. Saat ini frontend hanya mengekspor draf CSV. |
 | P2 | `GET /api/devices/{device_id}/capabilities`, `GET, PUT /api/devices/{device_id}/parameters` | Daftar kemampuan, parameter yang diizinkan, unit/batas nilai, baca/tulis parameter untuk Set Parameters. Hanya bila vendor mendukung operasi tersebut. |

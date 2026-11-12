@@ -10,7 +10,6 @@ import type { Plant } from "../services/fleet";
 import {
   format,
   getFleet,
-  request,
   specific,
   status,
   statusLabel,
@@ -20,7 +19,10 @@ import type { IconName } from "../components/Icon";
 import FleetSummary from "../components/FleetSummary";
 import type { AlarmSummary } from "../components/FleetSummary";
 import PlantTable from "../components/PlantTable";
+import PlantAdminDialog from "../components/PlantAdminDialog";
 import FleetStatistics from "../components/FleetStatistics";
+import { getPortfolioSummary, summaryAlarms } from "../services/portfolio";
+import type { PortfolioSummary } from "../services/portfolio";
 import { telemetryFreshness, telemetryLabel } from "../services/quality";
 const PlantMap = lazy(() => import("../components/PlantMap"));
 const HomeOverview = lazy(() => import("../components/HomeOverview"));
@@ -45,11 +47,13 @@ function PlantDrawer({
   onClose,
   onStatistics,
   now,
+  onEdit,
 }: {
   plant: Plant;
   onClose: () => void;
   onStatistics: () => void;
   now: number;
+  onEdit: () => void;
 }) {
   const freshness = telemetryFreshness(plant, now);
   const dialog = useRef<HTMLElement>(null);
@@ -102,8 +106,9 @@ function PlantDrawer({
         </div>
         <img
           className="drawer-photo"
-          src="/solar-plant.svg"
-          alt="Ilustrasi instalasi panel surya"
+          src={plant.image_url || "/solar-plant.svg"}
+          onError={(event) => {if (!event.currentTarget.src.endsWith("/solar-plant.svg")) event.currentTarget.src = "/solar-plant.svg";}}
+          alt={plant.image_url ? `Foto ${plant.plant_name}` : "Ilustrasi instalasi panel surya"}
         />
         <div className="drawer-title">
           <h2 id="plant-detail-title">{plant.plant_name}</h2>
@@ -170,6 +175,7 @@ function PlantDrawer({
               " Waktu pengukuran belum terverifikasi; timestamp berasal dari collector."}
           </p>
         </div>
+        <button className="outline detail-stats-button" onClick={onEdit}>Edit Plant Metadata</button>
         <button className="primary detail-stats-button" onClick={onStatistics}>
           View yield statistics
           <Icon name="arrow" size={17} />
@@ -214,13 +220,20 @@ export default function PortfolioDashboard() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [menu]);
+  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
+  const [plantEditor, setPlantEditor] = useState<{plant?: Plant} | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const result = await getFleet(signal);
+      const [fleetResult, summaryResult] = await Promise.allSettled([getFleet(signal), getPortfolioSummary(signal)]);
+      if (fleetResult.status === "rejected") throw fleetResult.reason;
+      const result = fleetResult.value;
       if (signal?.aborted) return;
       setPlants(result.plants);
-      setWarning(result.warning);
+      const snapshot = summaryResult.status === "fulfilled" ? summaryResult.value : null;
+      setSummary(snapshot);
+      setAlarms(snapshot ? summaryAlarms(snapshot) : emptyAlarms);
+      setWarning([result.warning, summaryResult.status === "rejected" ? "Summary portofolio belum dapat dimuat; ringkasan memakai overview dan alarm belum tersedia." : ""].filter(Boolean).join(" "));
       setError("");
       setUpdated(new Date());
       setNow(Date.now());
@@ -250,50 +263,6 @@ export default function PortfolioDashboard() {
       clearInterval(timer);
     };
   }, [load]);
-  useEffect(() => {
-    const controller = new AbortController();
-    if (!plants.length) return () => controller.abort();
-    void (async () => {
-      const counts = [0, 0, 0, 0, 0];
-      let coverage = 0;
-      for (let index = 0; index < plants.length; index += 4) {
-        if (controller.signal.aborted) return;
-        await Promise.all(
-          plants.slice(index, index + 4).map(async (p) => {
-            try {
-              const result = await request<
-                { severity?: string; level?: string }[]
-              >(
-                `/api/alarms/${encodeURIComponent(p.plant_code)}`,
-                controller.signal,
-              );
-              if (!result.configured || !Array.isArray(result.data)) return;
-              coverage++;
-              for (const alarm of result.data) {
-                const severity = String(
-                  alarm.severity ?? alarm.level ?? "",
-                ).toLowerCase();
-                const slot = ["critical", "major", "minor", "warning"].indexOf(
-                  severity,
-                );
-                counts[slot < 0 ? 4 : slot]++;
-              }
-            } catch {
-              /* Missing alarm coverage stays explicitly unavailable. */
-            }
-          }),
-        );
-      }
-      if (!controller.signal.aborted)
-        setAlarms({
-          available: coverage > 0,
-          counts,
-          coverage,
-          totalPlants: plants.length,
-        });
-    })();
-    return () => controller.abort();
-  }, [plants]);
   const selectPlant = useCallback((plant: Plant) => {
     setDetail(plant);
     setSelected(plant.plant_code);
@@ -495,6 +464,7 @@ export default function PortfolioDashboard() {
         <FleetSummary
           plants={plants}
           alarms={alarms}
+          summary={summary}
           onStats={() => changeView("statistics")}
           onStatus={() => changeView("list")}
           now={now}
@@ -526,12 +496,13 @@ export default function PortfolioDashboard() {
         )}
         {view === "overview" && (
           <Suspense fallback={<div className="map-loading">Memuat Dashboard…</div>}>
-            <HomeOverview plants={plants} alarms={alarms} now={now} selected={selected}
+            <HomeOverview plants={plants} alarms={alarms} summary={summary} now={now} selected={selected}
               onChange={setSelected} onSelect={selectPlant} refreshKey={updated?.getTime() ?? 0} />
           </Suspense>
         )}
         {view === "list" && (
           <PlantTable
+            onAdd={() => setPlantEditor({})}
             plants={plants}
             loading={loading}
             onSelect={selectPlant}
@@ -541,6 +512,7 @@ export default function PortfolioDashboard() {
         )}
         {view === "statistics" && (
           <FleetStatistics
+            summary={summary}
             plants={plants}
             selected={selected}
             onChange={setSelected}
@@ -584,6 +556,7 @@ export default function PortfolioDashboard() {
             plants.find((p) => p.plant_code === detail.plant_code) ?? detail
           }
           onClose={() => setDetail(null)}
+          onEdit={() => {setDetail(null); setPlantEditor({plant: detail});}}
           now={now}
           onStatistics={() => {
             setDetail(null);
@@ -591,6 +564,9 @@ export default function PortfolioDashboard() {
           }}
         />
       )}
+      {plantEditor && <PlantAdminDialog plant={plantEditor.plant} onClose={() => setPlantEditor(null)} onSaved={(code) => {
+        setPlantEditor(null); setSelected(code); void load();
+      }} />}
     </div>
   );
 }

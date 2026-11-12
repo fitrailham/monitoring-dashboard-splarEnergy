@@ -8,8 +8,8 @@ import { statisticsRange } from "../services/statistics";
 import type { ChartPoint, Period } from "../services/statistics";
 import { getYieldStatistics } from "../services/yieldStatistics";
 import type { YieldResult } from "../services/yieldStatistics";
-import { hourlyPower } from "../services/monitoring";
-import type { PowerSample, PowerPoint } from "../services/monitoring";
+import { getPowerStatistics } from "../services/analytics";
+import type { PowerPoint } from "../services/monitoring";
 import { DashboardBarChart } from "./AgDashboardChart";
 import MonitoringLineChart from "./MonitoringLineChart";
 import Icon from "./Icon";
@@ -21,7 +21,7 @@ import AlarmManagement from "./AlarmManagement";
 import CoefficientVariationAnalysis from "./CoefficientVariationAnalysis";
 
 interface Alarm { severity?: string; level?: string; name?: string; description?: string }
-interface Result { key: string; energy: YieldResult | null; power: PowerPoint[]; alarms: Alarm[] | null; errors: string[] }
+interface Result { key: string; energy: YieldResult | null; power: PowerPoint[]; powerComplete?: boolean; alarms: Alarm[] | null; errors: string[] }
 const EMPTY_POWER: PowerPoint[] = [];
 const EMPTY_ENERGY: ChartPoint[] = [];
 
@@ -79,7 +79,7 @@ export default function PlantMonitoring({ plants, selected, onChange, now, refre
     void Promise.allSettled([
       getYieldStatistics(selected, range, controller.signal),
       request<Alarm[]>(`/api/alarms/${encodeURIComponent(selected)}`, controller.signal),
-      period === "Day" ? request<PowerSample[]>(`/api/database/history/${encodeURIComponent(selected)}?limit=500`, controller.signal) : Promise.resolve(null),
+      period === "Day" ? getPowerStatistics(selected, range, controller.signal, 60) : Promise.resolve(null),
     ]).then(([energy, alarms, power]) => {
       if (controller.signal.aborted) return;
       const errors: string[] = [];
@@ -87,7 +87,7 @@ export default function PlantMonitoring({ plants, selected, onChange, now, refre
       if (power.status === "rejected") errors.push("Riwayat daya belum dapat dimuat.");
       setResponse({ key, energy: energy.status === "fulfilled" ? energy.value : null,
         alarms: alarms.status === "fulfilled" && alarms.value.configured && Array.isArray(alarms.value.data) ? alarms.value.data : null,
-        power: power.status === "fulfilled" && power.value && Array.isArray(power.value.data) ? hourlyPower(power.value.data, date, zone) : [], errors });
+        power: power.status === "fulfilled" && power.value ? power.value.points : [], powerComplete: power.status === "fulfilled" && Boolean(power.value?.complete), errors });
     });
     return () => controller.abort();
   }, [selected, period, date, zone, key, refreshKey, mountedAt, tab]);
@@ -165,7 +165,7 @@ export default function PlantMonitoring({ plants, selected, onChange, now, refre
             <div className="monitor-energy-summary"><span>PV yield: <strong>{format(energyTotal)}</strong> kWh {active?.energy && !active.energy.complete ? "· parsial" : ""}</span><span>Consumed by appliances: <strong>--</strong> kWh</span></div>
             <div className="monitor-energy-bars"><div><i /><span>Energi pemakaian sendiri belum tersedia</span></div><div><i /><span>Energi dari jaringan belum tersedia</span></div></div>
             <div className="monitor-chart" aria-busy={loading}>{period === "Day" ? <MonitoringLineChart options={powerOptions} /> : <DashboardBarChart options={energyOptions} />}{(loading || (period === "Day" ? !powerData.some((point) => point.pv !== null || point.grid !== null || point.load !== null) : !energyValues.length)) && <div className="monitor-chart-empty"><Icon name={loading ? "refresh" : "chart"} size={27} /><span>{loading ? "Memuat pengukuran…" : "Belum ada pengukuran terverifikasi pada periode ini"}</span></div>}</div>
-            <p className="monitor-card-note">{period === "Day" ? "Daya: pembacaan terakhir setiap jam, hingga 500 sampel terbaru. Tanggal lama di luar riwayat ini memerlukan API daya berbasis rentang. " : "Energi interval dari backend untuk seluruh rentang pilihan. "}{zone}. {active?.energy && !active.energy.complete ? "Cakupan energi parsial; total belum lengkap." : ""}</p>
+            <p className="monitor-card-note">{period === "Day" ? "Daya: pembacaan terakhir per jam dari API rentang tanggal. Gap dan tanda daya belum terverifikasi tetap kosong. " : "Energi interval dari backend untuk seluruh rentang pilihan. "}{zone}. {period === "Day" && active?.powerComplete === false ? "Cakupan daya parsial. " : ""}{active?.energy && !active.energy.complete ? "Cakupan energi parsial; total belum lengkap." : ""}</p>
             {active && active.errors.length > 0 && <div className="monitor-message" role="alert">{active.errors.join(" ")}<button onClick={() => setRetry((value) => value + 1)}>Coba lagi</button></div>}
           </section>
           <section className="monitor-card monitor-revenue"><div className="monitor-chart-heading"><h2>Revenue Trend <Icon name="info" size={13} /></h2><div className="monitor-chart-tools"><div className="monitor-periods" role="group" aria-label="Periode pendapatan">{(["Month", "Year", "Lifetime"] as Period[]).map((value) => <button key={value} className={revenuePeriod === value ? "active" : ""} aria-pressed={revenuePeriod === value} onClick={() => setRevenuePeriod(value)}>{value}</button>)}</div>{dateControl(true)}</div></div><p className="monitor-revenue-total">Total revenue <strong>--</strong> Rp</p><div className="monitor-revenue-placeholder"><div className="monitor-revenue-axis">{["750k", "600k", "450k", "300k", "150k", "0"].map((label) => <span key={label}>{label}<i /></span>)}</div><div className="monitor-revenue-empty"><Icon name="coins" size={32} /><span>Riwayat pendapatan belum tersedia</span><small>{revenuePeriod === "Lifetime" ? "Lifetime" : revenuePeriod === "Year" ? revenueDate.slice(0, 4) : revenueDate.slice(0, 7)}</small></div></div><div className="monitor-revenue-legend"><i />Revenue</div><p className="monitor-card-note">Grafik akan menampilkan data setelah energi eligible dan tarif tersedia dari backend.</p></section>

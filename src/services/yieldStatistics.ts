@@ -68,6 +68,8 @@ export async function getYieldStatistics(
           (value !== null && value < 0)) throw invalid();
       return {
         label: bucket.label,
+        startAt: bucket.start_at,
+        endAt: bucket.end_at,
         value: bucket.quality === "missing" || bucket.quality === "pending" ? null : value,
         quality: bucket.quality,
       };

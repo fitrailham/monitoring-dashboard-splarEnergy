@@ -24,13 +24,14 @@ import FleetStatistics from "../components/FleetStatistics";
 import { telemetryFreshness, telemetryLabel } from "../services/quality";
 const PlantMap = lazy(() => import("../components/PlantMap"));
 const HomeOverview = lazy(() => import("../components/HomeOverview"));
+const PlantMonitoring = lazy(() => import("../components/PlantMonitoring"));
 
-type View = "overview" | "list" | "map" | "statistics";
+type View = "overview" | "list" | "map" | "statistics" | "monitoring";
 const views: { id: View; icon: IconName; label: string }[] = [
+  { id: "list", icon: "list", label: "List View" },
+  { id: "map", icon: "globe", label: "Map View" },
+  { id: "statistics", icon: "chart", label: "KPI View" },
   { id: "overview", icon: "home", label: "Dashboard" },
-  { id: "list", icon: "list", label: "Plant list" },
-  { id: "map", icon: "globe", label: "Map view" },
-  { id: "statistics", icon: "chart", label: "Statistics" },
 ];
 const emptyAlarms: AlarmSummary = {
   available: false,
@@ -192,8 +193,27 @@ export default function PortfolioDashboard() {
     [updated, setUpdated] = useState<Date | null>(null);
   const [selected, setSelected] = useState(""),
     [detail, setDetail] = useState<Plant | null>(null),
-    [menu, setMenu] = useState<"help" | "more" | "user" | null>(null),
+    [menu, setMenu] = useState<"home" | "help" | "more" | "user" | null>(null),
     [alarms, setAlarms] = useState<AlarmSummary>(emptyAlarms);
+  const homeNavigation = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (menu !== "home") return;
+    function closeOutside(event: PointerEvent) {
+      if (event.target instanceof Node && !homeNavigation.current?.contains(event.target))
+        setMenu(null);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setMenu(null);
+      homeNavigation.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menu]);
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
@@ -303,7 +323,7 @@ export default function PortfolioDashboard() {
           />
         </a>
         <span className="header-divider" />
-        <span className="product-name">FusionSolar</span>
+        {/* <span className="product-name">FusionSolar</span> */}
         <button
           className="header-home"
           aria-label="Home"
@@ -312,15 +332,40 @@ export default function PortfolioDashboard() {
           <Icon name="home" size={23} />
         </button>
         <nav className="main-nav" aria-label="Main navigation">
-          <button
-            className={view === "overview" ? "active" : ""}
-            onClick={() => changeView("overview")}
+          <div
+            className="home-navigation"
+            ref={homeNavigation}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget))
+                setMenu((current) => current === "home" ? null : current);
+            }}
           >
-            Home
-          </button>
+            <button
+              className={view !== "monitoring" || menu === "home" ? "active" : ""}
+              aria-expanded={menu === "home"}
+              aria-controls="home-views"
+              onClick={() => setMenu(menu === "home" ? null : "home")}
+            >
+              Home
+            </button>
+            {menu === "home" && (
+              <div id="home-views" className="home-dropdown" role="group" aria-label="Tampilan Home">
+                <strong><Icon name="home" size={18} />Home</strong>
+                {views.map((item) => (
+                  <button
+                    key={item.id}
+                    aria-current={view === item.id ? "page" : undefined}
+                    onClick={() => changeView(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
-            className={view === "map" ? "active" : ""}
-            onClick={() => changeView("map")}
+            className={view === "monitoring" ? "active" : ""}
+            onClick={() => changeView("monitoring")}
           >
             Monitoring
           </button>
@@ -382,7 +427,7 @@ export default function PortfolioDashboard() {
             <Icon name="help" size={21} />
           </button>
         </div>
-        {menu && (
+        {menu && menu !== "home" && (
           <div className="header-dropdown">
             <button
               className="dropdown-close icon-button"
@@ -410,8 +455,8 @@ export default function PortfolioDashboard() {
               <>
                 <strong>Monitoring help</strong>
                 <p>
-                  Gunakan tombol di sisi kanan untuk beralih antara tabel, peta,
-                  dan statistik. Data diperbarui otomatis setiap 5 menit.
+                  Buka menu Home untuk memilih List View, Map View, KPI View,
+                  atau Dashboard. Data diperbarui otomatis setiap 5 menit.
                 </p>
                 <p>
                   Nilai -- dan status Unknown menandakan data yang belum
@@ -429,7 +474,7 @@ export default function PortfolioDashboard() {
         )}
       </header>
       <div
-        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""}`}
+        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""} ${view === "monitoring" ? "monitoring-hidden" : ""}`}
         role="group"
         aria-label="Dashboard view"
       >
@@ -446,7 +491,7 @@ export default function PortfolioDashboard() {
           </button>
         ))}
       </div>
-      {view !== "map" && view !== "overview" && (
+      {view !== "map" && view !== "overview" && view !== "monitoring" && (
         <FleetSummary
           plants={plants}
           alarms={alarms}
@@ -455,7 +500,7 @@ export default function PortfolioDashboard() {
           now={now}
         />
       )}
-      <main className={view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
+      <main className={view === "monitoring" ? "main-monitoring" : view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
         {(error || warning) && (
           <div
             className={`connection-banner ${error ? "error-banner" : ""}`}
@@ -472,6 +517,12 @@ export default function PortfolioDashboard() {
               Coba lagi
             </button>
           </div>
+        )}
+        {view === "monitoring" && (
+          <Suspense fallback={<div className="map-loading">Memuat Monitoring…</div>}>
+            <PlantMonitoring plants={plants} selected={selected} onChange={setSelected}
+              now={now} refreshKey={updated?.getTime() ?? 0} />
+          </Suspense>
         )}
         {view === "overview" && (
           <Suspense fallback={<div className="map-loading">Memuat Dashboard…</div>}>
@@ -508,7 +559,7 @@ export default function PortfolioDashboard() {
             <PlantMap plants={plants} onSelect={selectPlant} />
           </Suspense>
         )}
-        {view !== "map" && view !== "overview" && (
+        {view !== "map" && view !== "overview" && view !== "monitoring" && (
           <footer className="app-footer">
             <span>
               <i

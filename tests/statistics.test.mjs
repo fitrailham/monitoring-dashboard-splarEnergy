@@ -63,6 +63,8 @@ test("statistics API requests the selected range and preserves zero, missing and
     return Response.json(body);
   });
   const result = await getYieldStatistics("PLANT=A&B", range, controller.signal);
+  assert.equal(result.points[0].startAt, range.from);
+  assert.equal(result.points[0].endAt, body.data.buckets[0].end_at);
   assert.equal(result.points[0].value, 0);
   assert.equal(result.points[1].value, null);
   assert.equal(result.points[2].value, null);

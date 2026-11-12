@@ -3,6 +3,8 @@ export type Period = "Day" | "Month" | "Year" | "Lifetime";
 export interface ChartPoint {
   label: string;
   value: number | null;
+  startAt?: string;
+  endAt?: string;
   quality: "measured" | "derived" | "partial" | "missing" | "pending";
 }
 export interface StatisticsRange {

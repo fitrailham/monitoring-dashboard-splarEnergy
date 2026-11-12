@@ -3,7 +3,10 @@ import { AgGridReact } from "ag-grid-react";
 import {
   CellStyleModule,
   ClientSideRowModelModule,
+  ColumnApiModule,
+  ColumnAutoSizeModule,
   CsvExportModule,
+  EventApiModule,
   ModuleRegistry,
   NumberFilterModule,
   PaginationModule,
@@ -12,7 +15,15 @@ import {
   ValidationModule,
   themeQuartz,
 } from "ag-grid-community";
-import type { ColDef, GridApi, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, CsvExportParams, GridApi, ICellRendererParams } from "ag-grid-community";
+import {
+  ClipboardModule,
+  ColumnMenuModule,
+  ColumnsToolPanelModule,
+  ContextMenuModule,
+  ExcelExportModule,
+  LicenseManager,
+} from "ag-grid-enterprise";
 import type { Plant, PlantStatus } from "../services/fleet";
 import {
   format,
@@ -22,11 +33,24 @@ import {
   statusLabel,
 } from "../services/fleet";
 import Icon from "./Icon";
+import CommunityColumnHeader from "./CommunityColumnHeader";
 import { telemetryFreshness, telemetryLabel } from "../services/quality";
+
+const licenseKey = import.meta.env.VITE_AG_GRID_LICENSE_KEY?.trim();
+const licenseDetails: {
+  valid: boolean; expired?: boolean; trialExpired?: boolean; incorrectLicenseType?: boolean;
+} | null = licenseKey ? LicenseManager.getLicenseDetails(licenseKey) : null;
+const enterpriseEnabled = Boolean(licenseDetails?.valid && !licenseDetails.expired &&
+  !licenseDetails.trialExpired && !licenseDetails.incorrectLicenseType);
+if (enterpriseEnabled && licenseKey) LicenseManager.setLicenseKey(licenseKey);
 
 ModuleRegistry.registerModules([
   ClientSideRowModelModule,
+  ColumnApiModule,
+  ColumnAutoSizeModule,
+  ...(enterpriseEnabled ? [ColumnMenuModule, ColumnsToolPanelModule, ContextMenuModule, ClipboardModule, ExcelExportModule] : []),
   CsvExportModule,
+  EventApiModule,
   TextFilterModule,
   NumberFilterModule,
   PaginationModule,
@@ -34,6 +58,19 @@ ModuleRegistry.registerModules([
   TooltipModule,
   ...(import.meta.env.DEV ? [ValidationModule] : []),
 ]);
+const csvExportParams: CsvExportParams = {
+  fileName: "solar-plants.csv",
+  exportedRows: "filteredAndSorted",
+  columnKeys: [
+    "plant_code", "plant_name", "address", "status", "telemetry",
+    "capacity_kwp", "pv_power_kw", "specific", "yield_today_kwh", "total_yield_kwh",
+  ],
+  processCellCallback: ({ value }) => {
+    const text = String(value ?? "");
+    return /^[=+@\-\t\r]/.test(text) ? "'" + text : text;
+  },
+};
+
 const gridTheme = themeQuartz.withParams({
   fontFamily: "Arial, Helvetica, sans-serif",
   fontSize: 13,
@@ -44,6 +81,10 @@ const gridTheme = themeQuartz.withParams({
   headerBackgroundColor: "#f7f8fa",
   headerTextColor: "#121c29",
   headerFontWeight: 600,
+  headerColumnBorder: { color: "#d5d9df", width: 1 },
+  headerColumnBorderHeight: "35%",
+  headerColumnResizeHandleColor: "#c8cdd5",
+  headerColumnResizeHandleHeight: "35%",
   borderColor: "#dfe3e8",
   rowBorder: { color: "#e5e7eb", width: 1 },
   columnBorder: false,
@@ -120,10 +161,13 @@ export default function PlantTable({
       resizable: true,
       minWidth: 95,
       filter: "agTextColumnFilter",
-      floatingFilter: true,
+      floatingFilter: false,
       filterParams: { buttons: ["reset"], debounceMs: 200 },
-      suppressHeaderMenuButton: true,
+      suppressHeaderMenuButton: false,
+      suppressHeaderFilterButton: true,
+      ...(!enterpriseEnabled ? { headerComponentParams: { innerHeaderComponent: CommunityColumnHeader } } : {}),
       wrapHeaderText: true,
+      autoHeaderHeight: true,
     }),
     [],
   );
@@ -145,7 +189,7 @@ export default function PlantTable({
       comparator: compareNumbers,
     });
     return [
-      { field: "plant_code", headerName: "Plant Code", hide: true },
+      { field: "plant_code", headerName: "Plant Code", initialHide: true },
       {
         colId: "status",
         headerName: "Status",
@@ -199,14 +243,15 @@ export default function PlantTable({
       {
         colId: "country",
         headerName: "Country/Region",
-        width: 140,
+        width: 175,
+        minWidth: 165,
         valueGetter: () => "Indonesia",
       },
       {
         field: "address",
         headerName: "Address",
         width: 300,
-        hide: !showAddress,
+        initialHide: true,
         tooltip: ({ data }) => data?.address ?? "",
       },
       {
@@ -227,7 +272,8 @@ export default function PlantTable({
       {
         colId: "optimizers",
         headerName: "Optimizer Quantity",
-        width: 120,
+        width: 150,
+        minWidth: 140,
         sortable: false,
         cellDataType: "number",
         filter: "agNumberColumnFilter",
@@ -245,7 +291,8 @@ export default function PlantTable({
       {
         colId: "specific",
         headerName: "Specific Energy (kWh/kWp)",
-        width: 160,
+        width: 185,
+        minWidth: 165,
         cellDataType: "number",
         filter: "agNumberColumnFilter",
         valueGetter: (p) => (p.data ? specific(p.data) : null),
@@ -255,7 +302,7 @@ export default function PlantTable({
       numeric("yield_today_kwh", "Yield Today (kWh)", 145),
       numeric("total_yield_kwh", "Total Yield (kWh)", 155),
     ];
-  }, [onSelect, showAddress, now]);
+  }, [onSelect, now]);
   const syncPagination = useCallback(({ api }: { api: GridApi<Plant> }) => {
     if (api.isDestroyed()) return;
     setPagination({
@@ -268,26 +315,7 @@ export default function PlantTable({
     grid.current?.api.paginationGoToPage(page - 1);
   }
   function download() {
-    grid.current?.api.exportDataAsCsv({
-      fileName: "solar-plants.csv",
-      exportedRows: "filteredAndSorted",
-      columnKeys: [
-        "plant_code",
-        "plant_name",
-        "address",
-        "status",
-        "telemetry",
-        "capacity_kwp",
-        "pv_power_kw",
-        "specific",
-        "yield_today_kwh",
-        "total_yield_kwh",
-      ],
-      processCellCallback: ({ value }) => {
-        const text = String(value ?? "");
-        return /^[=+@\-\t\r]/.test(text) ? "'" + text : text;
-      },
-    });
+    grid.current?.api.exportDataAsCsv();
   }
   return (
     <section className="plant-table-card">
@@ -369,7 +397,9 @@ export default function PlantTable({
                   <input
                     type="checkbox"
                     checked={showAddress}
-                    onChange={(e) => setShowAddress(e.target.checked)}
+                    onChange={(e) => {
+                      grid.current?.api.setColumnsVisible(["address"], e.target.checked);
+                    }}
                   />
                   Show address
                 </label>
@@ -440,7 +470,7 @@ export default function PlantTable({
       </form>
 
       <div
-        className="plant-ag-grid"
+        className={`plant-ag-grid${enterpriseEnabled ? "" : " plant-grid-community"}`}
         role="region"
         aria-label="Tabel monitoring PLTS"
       >
@@ -450,9 +480,17 @@ export default function PlantTable({
           rowData={filtered}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
+          columnMenu="new"
+          suppressMenuHide
+          popupParent={document.body}
+          getContextMenuItems={enterpriseEnabled ? () => ["copy", "copyWithHeaders", "separator", "export"] : undefined}
+          defaultCsvExportParams={csvExportParams}
+          defaultExcelExportParams={enterpriseEnabled ? { fileName: "solar-plants.xlsx" } : undefined}
+          onColumnVisible={({ api }) => {
+            setShowAddress(api.getColumn("address")?.isVisible() ?? false);
+          }}
           getRowId={(p) => p.data.plant_code}
-          headerHeight={61}
-          floatingFiltersHeight={40}
+          headerHeight={52}
           rowHeight={53}
           pagination
           paginationPageSize={size}

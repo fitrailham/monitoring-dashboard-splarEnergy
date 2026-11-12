@@ -25,6 +25,8 @@ export interface Plant {
   is_demo?: boolean;
   time_zone?: string;
   has_pv?: boolean;
+  inverter_rated_power_kw?: Numeric;
+  revenue_today_idr?: Numeric;
   measured_at?: string | null;
   measurement_time_verified?: boolean;
   yield_business_date?: string | null;

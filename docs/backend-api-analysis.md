@@ -1,5 +1,11 @@
 # Kebutuhan API backend untuk IconGreen Solar Monitoring
 
+> Pembaruan 12 November 2026: beberapa endpoint yang disebut sebagai usulan dalam
+> dokumen ini sudah terdaftar pada Swagger backend aktif. Lihat
+> [checklist pengembangan backend](backend-development-checklist.md) untuk status
+> terbaru, kebutuhan tab Monitoring, pertimbangan database, dan informasi development.
+> Contoh kontrak dalam dokumen ini tetap harus dicocokkan dengan implementasi aktual.
+
 Dokumen ini menjelaskan kebutuhan data frontend, usulan kontrak endpoint, arti
 metrik, prioritas integrasi, dan kriteria penerimaan FE-BE. Rincian hasil audit
 backend aktual serta metadata operasional disimpan lokal dan tidak dipublikasikan.

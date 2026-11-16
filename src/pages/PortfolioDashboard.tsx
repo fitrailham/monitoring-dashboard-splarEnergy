@@ -1,3 +1,5 @@
+import { getLocale, translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import {
   lazy,
   Suspense,
@@ -20,15 +22,20 @@ import FleetSummary from "../components/FleetSummary";
 import type { AlarmSummary } from "../components/FleetSummary";
 import PlantTable from "../components/PlantTable";
 import PlantAdminDialog from "../components/PlantAdminDialog";
+import LanguageSelector from "../components/LanguageSelector";
+import AccountMenu from "../components/AccountMenu";
 import FleetStatistics from "../components/FleetStatistics";
 import { getPortfolioSummary, summaryAlarms } from "../services/portfolio";
 import type { PortfolioSummary } from "../services/portfolio";
 import { telemetryFreshness, telemetryLabel } from "../services/quality";
+import { REPORT_TABS } from "../services/reportWorkspace";
+import type { ReportType } from "../services/reportWorkspace";
 const PlantMap = lazy(() => import("../components/PlantMap"));
 const HomeOverview = lazy(() => import("../components/HomeOverview"));
 const PlantMonitoring = lazy(() => import("../components/PlantMonitoring"));
+const ReportsPage = lazy(() => import("../components/ReportsPage"));
 
-type View = "overview" | "list" | "map" | "statistics" | "monitoring";
+type View = "overview" | "list" | "map" | "statistics" | "monitoring" | "reports";
 const views: { id: View; icon: IconName; label: string }[] = [
   { id: "list", icon: "list", label: "List View" },
   { id: "map", icon: "globe", label: "Map View" },
@@ -55,6 +62,7 @@ function PlantDrawer({
   now: number;
   onEdit: () => void;
 }) {
+  useLanguage();
   const freshness = telemetryFreshness(plant, now);
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -95,10 +103,10 @@ function PlantDrawer({
         }}
       >
         <div className="drawer-header">
-          <span className="eyebrow">PLANT OVERVIEW</span>
+          <span className="eyebrow">{t("PLANT OVERVIEW")}</span>
           <button
             className="icon-button"
-            aria-label="Tutup detail PLTS"
+            aria-label={t("Tutup detail PLTS")}
             onClick={onClose}
           >
             <Icon name="close" />
@@ -108,25 +116,25 @@ function PlantDrawer({
           className="drawer-photo"
           src={plant.image_url || "/solar-plant.svg"}
           onError={(event) => {if (!event.currentTarget.src.endsWith("/solar-plant.svg")) event.currentTarget.src = "/solar-plant.svg";}}
-          alt={plant.image_url ? `Foto ${plant.plant_name}` : "Ilustrasi instalasi panel surya"}
+          alt={t(plant.image_url ? `Foto ${plant.plant_name}` : "Ilustrasi instalasi panel surya")}
         />
         <div className="drawer-title">
           <h2 id="plant-detail-title">{plant.plant_name}</h2>
           <span className={`status-label ${status(plant)}`}>
             <i className={`status-dot ${status(plant)}`} />
-            {statusLabel[status(plant)]}
+            {t(statusLabel[status(plant)])}
           </span>
         </div>
         <p className="plant-code">{plant.plant_code}</p>
         <p className="drawer-address">
           <Icon name="pin" size={17} />
-          {plant.address || "Alamat belum tersedia"}
+          {plant.address || t("Alamat belum tersedia")}
         </p>
         <div className={`telemetry-detail ${freshness.state}`}>
-          <strong>{telemetryLabel(freshness)}</strong>
+          <strong>{t(telemetryLabel(freshness))}</strong>
           <span>{freshness.measuredAt
-            ? `${freshness.state === "unverified" ? "Timestamp belum terverifikasi" : "Waktu pengukuran"}: ${new Date(freshness.measuredAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`
-            : "Waktu collector belum membuktikan waktu pengukuran perangkat."}</span>
+            ? t(`${freshness.state === "unverified" ? "Timestamp belum terverifikasi" : "Waktu pengukuran"}: ${new Date(freshness.measuredAt).toLocaleString(getLocale(), { timeZone: "Asia/Jakarta" })} WIB`)
+            : t("Waktu collector belum membuktikan waktu pengukuran perangkat.")}</span>
         </div>
         <div className="detail-metrics">
           {[
@@ -160,7 +168,7 @@ function PlantDrawer({
             },
           ].map((m) => (
             <div key={m.label}>
-              <span>{m.label}</span>
+              <span>{t(m.label)}</span>
               <strong>
                 {format(m.value)} <small>{m.unit}</small>
               </strong>
@@ -169,23 +177,20 @@ function PlantDrawer({
         </div>
         <div className="detail-note">
           <Icon name="info" size={17} />
-          <p>
-            Nilai -- berarti data belum tersedia.
-            {plant.timestamp_source === "collector" &&
-              " Waktu pengukuran belum terverifikasi; timestamp berasal dari collector."}
+          <p>{t("Nilai -- berarti data belum tersedia.")}{plant.timestamp_source === "collector" &&
+              t(" Waktu pengukuran belum terverifikasi; timestamp berasal dari collector.")}
           </p>
         </div>
-        <button className="outline detail-stats-button" onClick={onEdit}>Edit Plant Metadata</button>
-        <button className="primary detail-stats-button" onClick={onStatistics}>
-          View yield statistics
-          <Icon name="arrow" size={17} />
+        <button className="outline detail-stats-button" onClick={onEdit}>{t("Edit Plant Metadata")}</button>
+        <button className="primary detail-stats-button" onClick={onStatistics}>{t("View yield statistics")}<Icon name="arrow" size={17} />
         </button>
       </aside>
     </div>
   );
 }
 
-export default function PortfolioDashboard() {
+export default function PortfolioDashboard({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
+  useLanguage();
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -199,19 +204,22 @@ export default function PortfolioDashboard() {
     [updated, setUpdated] = useState<Date | null>(null);
   const [selected, setSelected] = useState(""),
     [detail, setDetail] = useState<Plant | null>(null),
-    [menu, setMenu] = useState<"home" | "help" | "more" | "user" | null>(null),
+    [menu, setMenu] = useState<"home" | "reports" | "help" | "more" | null>(null),
     [alarms, setAlarms] = useState<AlarmSummary>(emptyAlarms);
+  const [reportType, setReportType] = useState<ReportType>("plant");
   const homeNavigation = useRef<HTMLDivElement>(null);
+  const reportsNavigation = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (menu !== "home") return;
+    if (menu !== "home" && menu !== "reports") return;
+    const navigation = menu === "home" ? homeNavigation : reportsNavigation;
     function closeOutside(event: PointerEvent) {
-      if (event.target instanceof Node && !homeNavigation.current?.contains(event.target))
+      if (event.target instanceof Node && !navigation.current?.contains(event.target))
         setMenu(null);
     }
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setMenu(null);
-      homeNavigation.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      navigation.current?.querySelector<HTMLButtonElement>("button")?.focus();
     }
     document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", closeOnEscape);
@@ -271,6 +279,10 @@ export default function PortfolioDashboard() {
     setView(next);
     setMenu(null);
   }
+  function openReport(next: ReportType) {
+    setReportType(next);
+    changeView("reports");
+  }
   return (
     <div className="portfolio-app">
       <header className="app-header">
@@ -281,12 +293,12 @@ export default function PortfolioDashboard() {
             e.preventDefault();
             changeView("overview");
           }}
-          aria-label="IconGreen home"
+          aria-label={t("IconGreen home")}
         >
           <img
             className="brand-logo-image"
             src="/icongreen-logo.png"
-            alt="IconGreen — Member of PLN Group"
+            alt={t("IconGreen — Member of PLN Group")}
             width="1600"
             height="642"
           />
@@ -295,12 +307,12 @@ export default function PortfolioDashboard() {
         {/* <span className="product-name">FusionSolar</span> */}
         <button
           className="header-home"
-          aria-label="Home"
+          aria-label={t("Home")}
           onClick={() => changeView("overview")}
         >
           <Icon name="home" size={23} />
         </button>
-        <nav className="main-nav" aria-label="Main navigation">
+        <nav className="main-nav" aria-label={t("Main navigation")}>
           <div
             className="home-navigation"
             ref={homeNavigation}
@@ -310,23 +322,21 @@ export default function PortfolioDashboard() {
             }}
           >
             <button
-              className={view !== "monitoring" || menu === "home" ? "active" : ""}
+              className={view !== "monitoring" && view !== "reports" || menu === "home" ? "active" : ""}
               aria-expanded={menu === "home"}
               aria-controls="home-views"
               onClick={() => setMenu(menu === "home" ? null : "home")}
-            >
-              Home
-            </button>
+            >{t("Home")}</button>
             {menu === "home" && (
-              <div id="home-views" className="home-dropdown" role="group" aria-label="Tampilan Home">
-                <strong><Icon name="home" size={18} />Home</strong>
+              <div id="home-views" className="home-dropdown" role="group" aria-label={t("Tampilan Home")}>
+                <strong><Icon name="home" size={18} />{t("Home")}</strong>
                 {views.map((item) => (
                   <button
                     key={item.id}
                     aria-current={view === item.id ? "page" : undefined}
                     onClick={() => changeView(item.id)}
                   >
-                    {item.label}
+                    {t(item.label)}
                   </button>
                 ))}
               </div>
@@ -335,32 +345,33 @@ export default function PortfolioDashboard() {
           <button
             className={view === "monitoring" ? "active" : ""}
             onClick={() => changeView("monitoring")}
-          >
-            Monitoring
-          </button>
-          <button onClick={() => changeView("statistics")}>Reports</button>
-          <button disabled title="Fitur operasi bisnis belum tersedia">
-            Business Operation
-          </button>
-          <button onClick={() => changeView("list")}>Plants</button>
+          >{t("Monitoring")}</button>
+          <div className="home-navigation reports-navigation" ref={reportsNavigation} onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setMenu((current) => current === "reports" ? null : current);
+          }}>
+            <button className={view === "reports" || menu === "reports" ? "active" : ""}
+              aria-expanded={menu === "reports"} aria-controls="reports-menu" onClick={() => { setView("reports"); setMenu(menu === "reports" ? null : "reports"); }}>{t("Reports")}</button>
+            {menu === "reports" && <div id="reports-menu" className="home-dropdown reports-dropdown" role="group" aria-label={t("Reports")}>
+              <strong><Icon name="chart" size={18} />{t("Reports")}</strong>
+              {REPORT_TABS.map((item) => <button key={item.id} aria-current={view === "reports" && reportType === item.id ? "page" : undefined} onClick={() => openReport(item.id)}>{t(item.label)}</button>)}
+            </div>}
+          </div>
+          <button className="business-operation-disabled" disabled aria-disabled="true" title={t("Fitur operasi bisnis belum tersedia")}>{t("Business Operation")}</button>
+          <button onClick={() => changeView("list")}>{t("Plants")}</button>
           <button
             aria-expanded={menu === "more"}
             onClick={() => setMenu(menu === "more" ? null : "more")}
-          >
-            More
-          </button>
+          >{t("More")}</button>
         </nav>
         <div className="header-utilities">
           <button
             className="smart-design"
             disabled
-            title="SmartDesign belum tersedia"
-          >
-            SmartDesign
-          </button>
+            title={t("SmartDesign belum tersedia")}
+          >{t("SmartDesign")}</button>
           <button
-            aria-label="Refresh monitoring"
-            title="Refresh monitoring"
+            aria-label={t("Refresh monitoring")}
+            title={t("Refresh monitoring")}
             onClick={() => void load()}
           >
             <Icon
@@ -370,44 +381,35 @@ export default function PortfolioDashboard() {
             />
           </button>
           <button
-            aria-label="Buka laporan yield"
-            title="Yield reports"
-            onClick={() => changeView("statistics")}
+            aria-label={t("Buka laporan yield")}
+            title={t("Reports")}
+            onClick={() => openReport("plant")}
           >
             <Icon name="calendar" size={19} />
           </button>
-          <span className="language">
-            <Icon name="globe" size={21} />
-            English
-          </span>
+          <LanguageSelector />
           <button
-            className="account-button"
-            aria-expanded={menu === "user"}
-            onClick={() => setMenu(menu === "user" ? null : "user")}
-          >
-            <Icon name="user" size={19} />
-            <span>IconGreenTWH</span>
-          </button>
-          <button
-            aria-label="Bantuan dashboard"
+            className="header-help"
+            aria-label={t("Bantuan dashboard")}
             aria-expanded={menu === "help"}
             onClick={() => setMenu(menu === "help" ? null : "help")}
           >
             <Icon name="help" size={21} />
           </button>
+          <AccountMenu displayName={displayName} onLogout={onLogout} />
         </div>
-        {menu && menu !== "home" && (
+        {menu && menu !== "home" && menu !== "reports" && (
           <div className="header-dropdown">
             <button
               className="dropdown-close icon-button"
-              aria-label="Tutup menu"
+              aria-label={t("Tutup menu")}
               onClick={() => setMenu(null)}
             >
               <Icon name="close" size={15} />
             </button>
             {menu === "more" ? (
               <>
-                <strong>Workspace views</strong>
+                <strong>{t("Workspace views")}</strong>
                 {views.map((v) => (
                   <button
                     className="dropdown-item"
@@ -415,43 +417,31 @@ export default function PortfolioDashboard() {
                     onClick={() => changeView(v.id)}
                   >
                     <Icon name={v.icon} size={17} />
-                    {v.label}
+                    {t(v.label)}
                     <Icon name="chevron" size={14} />
                   </button>
                 ))}
               </>
-            ) : menu === "help" ? (
-              <>
-                <strong>Monitoring help</strong>
-                <p>
-                  Buka menu Home untuk memilih List View, Map View, KPI View,
-                  atau Dashboard. Data diperbarui otomatis setiap 5 menit.
-                </p>
-                <p>
-                  Nilai -- dan status Unknown menandakan data yang belum
-                  tersedia.
-                </p>
-              </>
             ) : (
               <>
-                <strong>IconGreenTWH</strong>
-                <p>Solar monitoring workspace</p>
-                <span className="read-only-badge">Monitoring access</span>
+                <strong>{t("Monitoring help")}</strong>
+                <p>{t("Buka menu Home untuk memilih List View, Map View, KPI View, atau Dashboard. Data diperbarui otomatis setiap 5 menit.")}</p>
+                <p>{t("Nilai -- dan status Unknown menandakan data yang belum tersedia.")}</p>
               </>
             )}
           </div>
         )}
       </header>
       <div
-        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""} ${view === "monitoring" ? "monitoring-hidden" : ""}`}
+        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""} ${view === "monitoring" || view === "reports" ? "monitoring-hidden" : ""}`}
         role="group"
-        aria-label="Dashboard view"
+        aria-label={t("Dashboard view")}
       >
         {views.map((v) => (
           <button
             key={v.id}
-            title={v.label}
-            aria-label={v.label}
+            title={t(v.label)}
+            aria-label={t(v.label)}
             aria-pressed={view === v.id}
             className={view === v.id ? "active" : ""}
             onClick={() => changeView(v.id)}
@@ -460,7 +450,7 @@ export default function PortfolioDashboard() {
           </button>
         ))}
       </div>
-      {view !== "map" && view !== "overview" && view !== "monitoring" && (
+      {view !== "map" && view !== "overview" && view !== "monitoring" && view !== "reports" && (
         <FleetSummary
           plants={plants}
           alarms={alarms}
@@ -470,32 +460,36 @@ export default function PortfolioDashboard() {
           now={now}
         />
       )}
-      <main className={view === "monitoring" ? "main-monitoring" : view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
-        {(error || warning) && (
+      <main className={view === "reports" ? "main-reports" : view === "monitoring" ? "main-monitoring" : view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
+        {(t(error) || t(warning)) && (
           <div
             className={`connection-banner ${error ? "error-banner" : ""}`}
             role="alert"
           >
             <Icon name="info" size={18} />
             <span>
-              {error || warning}
+              {t(error) || t(warning)}
               {error && plants.length > 0
-                ? " Menampilkan data terakhir yang berhasil dimuat."
+                ? t(" Menampilkan data terakhir yang berhasil dimuat.")
                 : ""}
             </span>
-            <button className="text-button" onClick={() => void load()}>
-              Coba lagi
-            </button>
+            <button className="text-button" onClick={() => void load()}>{t("Coba lagi")}</button>
           </div>
         )}
+        {view === "reports" && (
+          <Suspense fallback={<div className="map-loading">{t("Memuat Reports…")}</div>}>
+            <ReportsPage plants={plants} report={reportType} onReportChange={setReportType}
+              now={now} refreshKey={updated?.getTime() ?? 0} plantsLoading={loading} />
+          </Suspense>
+        )}
         {view === "monitoring" && (
-          <Suspense fallback={<div className="map-loading">Memuat Monitoring…</div>}>
+          <Suspense fallback={<div className="map-loading">{t("Memuat Monitoring…")}</div>}>
             <PlantMonitoring plants={plants} selected={selected} onChange={setSelected}
               now={now} refreshKey={updated?.getTime() ?? 0} />
           </Suspense>
         )}
         {view === "overview" && (
-          <Suspense fallback={<div className="map-loading">Memuat Dashboard…</div>}>
+          <Suspense fallback={<div className="map-loading">{t("Memuat Dashboard…")}</div>}>
             <HomeOverview plants={plants} alarms={alarms} summary={summary} now={now} selected={selected}
               onChange={setSelected} onSelect={selectPlant} refreshKey={updated?.getTime() ?? 0} />
           </Suspense>
@@ -524,29 +518,25 @@ export default function PortfolioDashboard() {
             fallback={
               <div className="map-loading">
                 <Icon name="globe" size={30} />
-                <span>Loading map…</span>
+                <span>{t("Loading map…")}</span>
               </div>
             }
           >
             <PlantMap plants={plants} onSelect={selectPlant} />
           </Suspense>
         )}
-        {view !== "map" && view !== "overview" && view !== "monitoring" && (
+        {view !== "map" && view !== "overview" && view !== "monitoring" && view !== "reports" && (
           <footer className="app-footer">
             <span>
               <i
                 className={`connection-dot ${error ? "offline" : updated ? "online" : ""}`}
               />
               {updated
-                ? `API synced ${updated.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })} WIB`
-                : "Connecting to monitoring…"}
-              <span className="footer-separator">·</span>Auto-refresh 5 min
-            </span>
-            <span>
-              IconGreen Solar Monitoring
-              <span className="footer-separator">·</span>
-              {plants.length} plants
-            </span>
+                ? t(`API synced ${updated.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })} WIB`)
+                : t("Connecting to monitoring…")}
+              <span className="footer-separator">·</span>{t("Auto-refresh 5 min")}</span>
+            <span>{t("IconGreen Solar Monitoring")}<span className="footer-separator">·</span>
+              {plants.length}{t(" plants")}</span>
           </footer>
         )}
       </main>

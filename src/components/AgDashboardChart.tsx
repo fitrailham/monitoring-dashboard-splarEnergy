@@ -3,6 +3,7 @@ import {
   BarSeriesModule,
   CategoryAxisModule,
   DonutSeriesModule,
+  LegendModule,
   NumberAxisModule,
 } from "ag-charts-community";
 import type {
@@ -10,7 +11,7 @@ import type {
   AgPolarChartOptions,
 } from "ag-charts-community";
 
-const barModules = [BarSeriesModule, CategoryAxisModule, NumberAxisModule];
+const barModules = [BarSeriesModule, CategoryAxisModule, NumberAxisModule, LegendModule];
 const donutModules = [DonutSeriesModule];
 const chartStyle = { width: "100%", height: "100%", minHeight: 0 };
 

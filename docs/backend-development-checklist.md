@@ -6,6 +6,11 @@
 
 Tanggal pemeriksaan: 12 November 2026.
 
+Tambahan 16 November 2026: [tabel kebutuhan API Reports](reports-api-requirements.md)
+merinci halaman Reports pada navigasi utama dan kelima jenis laporan, termasuk
+PCS, Battery, PV&ESS, subscription, serta agregasi portofolio. Endpoint usulan di
+dokumen tersebut belum diverifikasi ulang pada backend live.
+
 Dokumen ini berdasarkan kode frontend saat ini dan pemeriksaan GET `/openapi.json`
 pada backend yang dikonfigurasi melalui `VITE_API_URL`. Status **terdaftar** berarti
 route dan model tercantum di Swagger; bukan jaminan data produksi sudah lengkap,

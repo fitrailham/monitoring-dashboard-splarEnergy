@@ -1,3 +1,5 @@
+import { translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 interface EnergyFlowProps {
   pvPower: number | null;
   batteryPower: number | null;
@@ -24,6 +26,7 @@ function EnergyFlow({
   loadPower,
   gridPower,
 }: EnergyFlowProps) {
+  useLanguage();
   return (
     <div className="energy-flow">
 
@@ -32,7 +35,7 @@ function EnergyFlow({
           🏢
         </div>
 
-        <span>Building</span>
+        <span>{t("Building")}</span>
 
         <strong>
           {formatValue(loadPower)}
@@ -55,16 +58,15 @@ function EnergyFlow({
           🔋
         </div>
 
-        <span>ESS</span>
+        <span>{t("ESS")}</span>
 
         <strong>
           {formatValue(batteryPower)}
         </strong>
 
-        <small>
-          SOC{" "}
+        <small>{t("SOC")}{" "}
           {batterySoc !== null
-            ? `${batterySoc.toFixed(1)}%`
+            ? t(`${batterySoc.toFixed(1)}%`)
             : "--"}
         </small>
       </div>
@@ -77,7 +79,7 @@ function EnergyFlow({
           ⚡
         </div>
 
-        <span>Grid</span>
+        <span>{t("Grid")}</span>
 
         <strong>
           {formatValue(gridPower)}
@@ -92,7 +94,7 @@ function EnergyFlow({
           ☀️
         </div>
 
-        <span>Solar PV</span>
+        <span>{t("Solar PV")}</span>
 
         <strong>
           {formatValue(pvPower)}

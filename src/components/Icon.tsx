@@ -24,8 +24,14 @@ type IconName =
   | "coal"
   | "pin"
   | "arrow"
-  | "check";
+  | "check"
+  | "lock"
+  | "eye"
+  | "eye-off";
 const paths: Record<IconName, string> = {
+  lock: "M5 10h14v11H5V10ZM8 10V6a4 4 0 0 1 8 0v4M12 14v3",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
+  "eye-off": "m3 3 18 18M10 5.2A12 12 0 0 1 12 5c6 0 10 7 10 7a20 20 0 0 1-3 3.8M6.5 6.5A20 20 0 0 0 2 12s4 7 10 7a12 12 0 0 0 5.5-1.5M10 10a3 3 0 0 0 4 4",
   home: "m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9",
   list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   globe:

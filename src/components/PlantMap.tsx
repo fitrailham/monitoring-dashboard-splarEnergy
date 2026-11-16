@@ -1,3 +1,5 @@
+import { getLanguage, translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -14,6 +16,7 @@ export default function PlantMap({
   onSelect: (plant: Plant) => void;
   overview?: boolean;
 }) {
+  useLanguage();
   const element = useRef<HTMLDivElement>(null),
     mapRef = useRef<L.Map | null>(null),
     [search, setSearch] = useState(""),
@@ -26,7 +29,7 @@ export default function PlantMap({
           .toLowerCase()
           .includes(query.toLowerCase()),
       ),
-    [plants, query],
+    [plants, query, getLanguage()],
   );
   const located = useMemo(
     () =>
@@ -40,7 +43,7 @@ export default function PlantMap({
           Math.abs(lng) <= 180
         );
       }),
-    [matches],
+    [matches, getLanguage()],
   );
   useEffect(() => {
     if (!element.current) return;
@@ -116,7 +119,7 @@ export default function PlantMap({
       <div
         className="leaflet-map"
         ref={element}
-        aria-label="Peta lokasi PLTS"
+        aria-label={t("Peta lokasi PLTS")}
       />
       <form
         className="map-search"
@@ -125,22 +128,22 @@ export default function PlantMap({
           setQuery(search.trim());
         }}
       >
-        <span>All plants</span>
+        <span>{t("All plants")}</span>
         <input
-          aria-label="Cari lokasi PLTS"
-          placeholder="Enter a plant name or region"
+          aria-label={t("Cari lokasi PLTS")}
+          placeholder={t("Enter a plant name or region")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button aria-label="Cari di peta" type="submit">
+        <button aria-label={t("Cari di peta")} type="submit">
           <Icon name="search" />
         </button>
       </form>
       <aside className="map-plants">
         <div className="map-panel-heading">
           <div>
-            <span className="eyebrow">PLANT LOCATIONS</span>
-            <h2>{matches.length} plants in your portfolio</h2>
+            <span className="eyebrow">{t("PLANT LOCATIONS")}</span>
+            <h2>{matches.length}{t(" plants in your portfolio")}</h2>
           </div>
           <Icon name="pin" />
         </div>
@@ -148,8 +151,8 @@ export default function PlantMap({
           <Icon name="info" size={17} />
           <span>
             {located.length
-              ? `${located.length} PLTS memiliki koordinat lokasi.`
-              : "Koordinat lokasi belum tersedia dari backend. Alamat PLTS tetap dapat dilihat di bawah."}
+              ? t(`${located.length} PLTS memiliki koordinat lokasi.`)
+              : t("Koordinat lokasi belum tersedia dari backend. Alamat PLTS tetap dapat dilihat di bawah.")}
           </span>
         </div>
         <div className="map-plant-list">
@@ -158,32 +161,26 @@ export default function PlantMap({
               <img src="/solar-plant.svg" alt="" />
               <div>
                 <strong>{p.plant_name}</strong>
-                <span>{p.address || "Alamat belum tersedia"}</span>
-                <small>{format(p.capacity_kwp)} kWp</small>
+                <span>{p.address || t("Alamat belum tersedia")}</span>
+                <small>{format(p.capacity_kwp)}{t(" kWp")}</small>
               </div>
               <Icon name="chevron" size={15} />
             </button>
           ))}
           {!matches.length && (
-            <p className="empty-copy">
-              Tidak ada PLTS yang cocok dengan pencarian.
-            </p>
+            <p className="empty-copy">{t("Tidak ada PLTS yang cocok dengan pencarian.")}</p>
           )}
         </div>
         <div className="map-panel-footer">
-          <span>{located.length} mapped</span>
-          <span>{matches.length - located.length} without coordinates</span>
+          <span>{located.length}{t(" mapped")}</span>
+          <span>{matches.length - located.length}{t(" without coordinates")}</span>
         </div>
       </aside>
       {tilesFailed && (
-        <div className="map-tile-warning" role="status">
-          Sebagian peta belum termuat. Periksa koneksi internet.
-        </div>
+        <div className="map-tile-warning" role="status">{t("Sebagian peta belum termuat. Periksa koneksi internet.")}</div>
       )}
       <div className="map-disclaimer">
-        <Icon name="info" size={14} />
-        Lokasi ditampilkan hanya jika koordinat tersedia.
-      </div>
+        <Icon name="info" size={14} />{t("Lokasi ditampilkan hanya jika koordinat tersedia.")}</div>
     </section>
   );
 }

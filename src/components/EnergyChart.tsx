@@ -1,26 +1,21 @@
+import { translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 function EnergyChart() {
+  useLanguage();
   return (
     <div className="panel chart-panel">
 
       <div className="chart-header">
-        <h3>Energy Overview</h3>
+        <h3>{t("Energy Overview")}</h3>
 
         <div className="chart-tabs">
-          <button className="active">
-            Day
-          </button>
+          <button className="active">{t("Day")}</button>
 
-          <button>
-            Month
-          </button>
+          <button>{t("Month")}</button>
 
-          <button>
-            Year
-          </button>
+          <button>{t("Year")}</button>
 
-          <button>
-            Lifetime
-          </button>
+          <button>{t("Lifetime")}</button>
         </div>
       </div>
 

@@ -1,3 +1,5 @@
+import { translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 interface MetricCardProps {
   title: string;
   value: string | number;
@@ -11,6 +13,7 @@ function MetricCard({
   unit,
   icon = "⚡",
 }: MetricCardProps) {
+  useLanguage();
   return (
     <div className="metric-card">
       <div className="metric-icon">
@@ -19,7 +22,7 @@ function MetricCard({
 
       <div>
         <div className="metric-title">
-          {title}
+          {t(title)}
         </div>
 
         <div className="metric-value">

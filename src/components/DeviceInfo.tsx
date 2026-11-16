@@ -1,3 +1,5 @@
+import { translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 interface DeviceInfoProps {
   pvCapacity: number | null;
   essCapacity?: number;
@@ -7,9 +9,10 @@ function DeviceInfo({
   pvCapacity,
   essCapacity = 860.16,
 }: DeviceInfoProps) {
+  useLanguage();
   return (
     <div className="panel device-panel">
-      <h3>Device Information</h3>
+      <h3>{t("Device Information")}</h3>
 
       <div className="device-grid">
         <div className="device-item">
@@ -17,13 +20,11 @@ function DeviceInfo({
             ☀️
           </div>
 
-          <div className="device-label">
-            Installed PV Capacity
-          </div>
+          <div className="device-label">{t("Installed PV Capacity")}</div>
 
           <div className="device-value">
             {pvCapacity?.toFixed(2) ?? "--"}
-            <span> kWp</span>
+            <span>{t(" kWp")}</span>
           </div>
         </div>
 
@@ -32,13 +33,11 @@ function DeviceInfo({
             🔋
           </div>
 
-          <div className="device-label">
-            Installed ESS Capacity
-          </div>
+          <div className="device-label">{t("Installed ESS Capacity")}</div>
 
           <div className="device-value">
             {essCapacity.toFixed(2)}
-            <span> kWh</span>
+            <span>{t(" kWh")}</span>
           </div>
         </div>
       </div>

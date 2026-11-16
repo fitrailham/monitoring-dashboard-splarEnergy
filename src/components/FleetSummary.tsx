@@ -1,3 +1,5 @@
+import { getLanguage, translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import { useMemo } from "react";
 import type { AgPolarChartOptions } from "ag-charts-community";
 import { DashboardDonutChart } from "./AgDashboardChart";
@@ -28,6 +30,7 @@ function Donut({
   label: string;
   total: number | null;
 }) {
+  useLanguage();
   const count = values.reduce((sum, value) => sum + value, 0);
   const options = useMemo<
     AgPolarChartOptions<{ label: string; value: number; color: string }>
@@ -67,25 +70,25 @@ function Donut({
           }),
           tooltip: {
             renderer: ({ datum }) => ({
-              title: datum.label,
-              data: [{ label: "Count", value: String(datum.value) }],
+              title: t(datum.label),
+              data: [{ label: t("Count"), value: String(datum.value) }],
             }),
           },
         },
       ],
     }),
-    [values, colors, label, count],
+    [values, colors, label, count, getLanguage()],
   );
   return (
     <div
       className="donut ag-donut"
-      aria-label={label + ": " + (total ?? "belum tersedia")}
+      aria-label={t(label + ": " + (total ?? "belum tersedia"))}
     >
       {!count && <div className="donut-empty-ring" aria-hidden="true" />}
       <DashboardDonutChart options={options} />
       <div className="donut-label">
         <strong>{total ?? "--"}</strong>
-        <span>{label}</span>
+        <span>{t(label)}</span>
       </div>
     </div>
   );
@@ -103,6 +106,7 @@ function KPI({
   unit: string;
   coverage?: MetricSummary;
 }) {
+  useLanguage();
   return (
     <div className="fleet-kpi">
       <div className="kpi-symbol">
@@ -110,12 +114,12 @@ function KPI({
       </div>
       <div>
         <div className="kpi-number">
-          {format(value)} <small>{unit}</small>
+          {format(value)} <small>{t(unit)}</small>
         </div>
-        <span>{label}</span>
+        <span>{t(label)}</span>
         {coverage && (
-          <small className={`kpi-coverage ${coverage.partial ? "partial" : ""}`} title={metricCoverageDetail(coverage)}>
-            {metricCoverageLabel(coverage)}
+          <small className={`kpi-coverage ${coverage.partial ? "partial" : ""}`} title={t(metricCoverageDetail(coverage))}>
+            {t(metricCoverageLabel(coverage))}
           </small>
         )}
       </div>
@@ -137,6 +141,7 @@ export default function FleetSummary({
   now: number;
   summary?: PortfolioSummary | null;
 }) {
+  useLanguage();
   const statuses = ["normal", "faulty", "disconnected", "unknown"] as const;
   const values = statuses.map(
     (s) => summary ? summary.plant_status[s] : plants.filter((p) => status(p) === s).length,
@@ -147,14 +152,13 @@ export default function FleetSummary({
     totalYield = summaryMetric(summary, "total_yield_kwh", aggregateMetric(plants, "total_yield_kwh", now));
   const freshness = plants.map((plant) => telemetryFreshness(plant, now));
   return (
-    <section className="fleet-summary" aria-label="Fleet overview">
+    <section className="fleet-summary" aria-label={t("Fleet overview")}>
       <div className="solar-grid" aria-hidden="true" />
       <article className="summary-kpis">
         <div className="summary-title">
-          <h2>
-            Plant KPIs <Icon name="settings" size={13} />
+          <h2>{t("Plant KPIs ")}<Icon name="settings" size={13} />
           </h2>
-          <button aria-label="Lihat statistik yield" onClick={onStats}>
+          <button aria-label={t("Lihat statistik yield")} onClick={onStats}>
             <Icon name="chevron" />
           </button>
         </div>
@@ -198,8 +202,8 @@ export default function FleetSummary({
       </article>
       <article className="summary-status">
         <div className="summary-title">
-          <h2>Plant Status</h2>
-          <button aria-label="Lihat daftar dan status PLTS" onClick={onStatus}>
+          <h2>{t("Plant Status")}</h2>
+          <button aria-label={t("Lihat daftar dan status PLTS")} onClick={onStatus}>
             <Icon name="chevron" />
           </button>
         </div>
@@ -216,17 +220,17 @@ export default function FleetSummary({
                 <i className={`status-dot ${s}`} />
                 <span>
                   <strong>{values[i]}</strong>
-                  <small>{statusLabel[s]}</small>
+                  <small>{t(statusLabel[s])}</small>
                 </span>
               </div>
             ))}
-            <p>Status mengikuti data backend.</p>
+            <p>{t("Status mengikuti data backend.")}</p>
           </div>
         </div>
       </article>
       <article className="summary-alarms">
         <div className="summary-title">
-          <h2>Active Alarms</h2>
+          <h2>{t("Active Alarms")}</h2>
           <Icon name="bell" size={17} />
         </div>
         <div className="donut-layout">
@@ -249,7 +253,7 @@ export default function FleetSummary({
                 </span>
                 <span>
                   <strong>{alarms.available ? alarms.counts[i] : "--"}</strong>
-                  <small>{label}</small>
+                  <small>{t(label)}</small>
                 </span>
               </div>
             ))}
@@ -258,25 +262,25 @@ export default function FleetSummary({
                 <i className="status-dot disconnected" />
                 <span>
                   <strong>{alarms.counts[4]}</strong>
-                  <small>Unclassified</small>
+                  <small>{t("Unclassified")}</small>
                 </span>
               </div>
             )}
             <p>
               {alarms.available
-                ? `Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS${alarms.complete === false ? " · parsial" : ""}`
-                : "Data alarm belum tersedia"}
+                ? t(`Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS${alarms.complete === false ? " · parsial" : ""}`)
+                : t("Data alarm belum tersedia")}
             </p>
           </div>
         </div>
       </article>
-      <div className="fleet-data-quality" aria-label="Kualitas waktu pengukuran">
-        <span>Telemetry:</span>
-        <span>{freshness.filter((item) => item.state === "fresh").length} terbaru</span>
-        <span>{freshness.filter((item) => item.state === "stale").length} lama</span>
-        <span>{freshness.filter((item) => item.state === "unverified").length} belum terverifikasi</span>
-        <span>{freshness.filter((item) => item.state === "missing").length} tanpa waktu</span>
-        <small>KPI telemetry hanya menjumlahkan pengukuran terbaru yang terverifikasi.</small>
+      <div className="fleet-data-quality" aria-label={t("Kualitas waktu pengukuran")}>
+        <span>{t("Telemetry:")}</span>
+        <span>{freshness.filter((item) => item.state === "fresh").length}{t(" terbaru")}</span>
+        <span>{freshness.filter((item) => item.state === "stale").length}{t(" lama")}</span>
+        <span>{freshness.filter((item) => item.state === "unverified").length}{t(" belum terverifikasi")}</span>
+        <span>{freshness.filter((item) => item.state === "missing").length}{t(" tanpa waktu")}</span>
+        <small>{t("KPI telemetry hanya menjumlahkan pengukuran terbaru yang terverifikasi.")}</small>
       </div>
     </section>
   );

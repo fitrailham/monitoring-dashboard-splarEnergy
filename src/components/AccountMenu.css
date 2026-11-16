@@ -1,0 +1,18 @@
+.account-menu { position: relative; align-self: stretch; display: flex; align-items: center; flex-shrink: 0; height: 60px; }
+.app-header .header-utilities .account-menu .account-trigger { display: flex; align-items: center; gap: 7px; min-height: 38px; color: #ddd; font-size: 13px; }
+.app-header .header-utilities .account-menu .account-trigger.active { color: #078bed; }
+.account-name { display: inline-block; max-width: 145px; overflow: hidden; text-overflow: ellipsis; }
+.account-options { position: absolute; top: 100%; right: 0; width: 158px; padding: 3px 0; background: #fff; color: #282828; border: 1px solid #e3e3e3; box-shadow: 0 3px 6px #0003; z-index: 1500; }
+.app-header .header-utilities .account-menu .account-options button { display: flex; width: 100%; min-height: 38px; padding: 9px 16px; color: #282828; text-align: left; font-size: 14px; }
+.app-header .header-utilities .account-menu .account-options button:hover { color: #078bed; background: #f4f8ff; }
+.main-nav .business-operation-disabled:disabled { color: #858a91; opacity: 1; cursor: not-allowed; }
+@media (max-width: 1000px) { .account-menu .account-name { display: none; } }
+@media (max-width: 700px) {
+  .account-menu { height: 57px; }
+  .app-header .header-utilities > .header-help { display: none; }
+  .app-header .main-nav { gap: 10px; }
+  .app-header .header-utilities { gap: 10px; }
+  .app-header .header-utilities .account-menu .account-trigger { padding: 0; min-height: 34px; }
+  .account-trigger svg { width: 18px; height: 18px; }
+  .account-options { top: calc(100% + 10px); }
+}

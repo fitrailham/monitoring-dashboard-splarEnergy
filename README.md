@@ -51,6 +51,32 @@ belum ada agar konfigurasi lokal tidak tertimpa. `npm.cmd` dapat diganti dengan
 Buka alamat Local yang dicetak Vite, biasanya `http://localhost:5173/`. Jika port
 terpakai, Vite dapat memilih port lain; origin tersebut juga perlu diizinkan BE.
 
+## Login dan Log Out — pratinjau frontend
+
+Halaman awal membuka `/login` dengan form nama pengguna dan kata sandi,
+validasi isian, tampilkan/sembunyikan kata sandi, serta pilihan bahasa. Sesuai
+scope saat ini, **alur ini adalah pratinjau FE dan belum memverifikasi akun**.
+Form yang terisi membuka dashboard; tidak ada kredensial dikirim ke backend.
+
+State pratinjau hanya berisi mode dan nama tampilan di `sessionStorage` agar
+reload pada tab yang sama tetap dapat membuka dashboard. Kata sandi tidak
+disimpan. Menu akun di ujung kanan menyediakan **Log Out / Keluar** untuk
+menghapus state pratinjau dan kembali ke `/login`. Preferensi bahasa dan draf
+layout tetap tersedia. Business Operation nonaktif.
+
+Saat API autentikasi siap, ganti alur `previewSession` dengan sesi yang
+diverifikasi server, validasi izin pada API, dan invalidasi sesi saat logout.
+State/routing pratinjau FE bukan pembatas akses data.
+
+## Pilihan bahasa
+
+Klik ikon globe di header untuk memilih **Bahasa Indonesia** atau **English**.
+Menu, laporan, filter, tabel, dan pesan antarmuka mengikuti bahasa pilihan; format
+angka memakai `id-ID` atau `en-US`. Preferensi tersimpan di browser dan tetap
+digunakan setelah reload. Penggantian bahasa mempertahankan halaman serta filter
+yang sedang dibuka. Pada mobile, pemilih bahasa memakai label ringkas ID/EN.
+Nama PLTS, identitas perangkat, satuan, dan data dari backend tidak diubah.
+
 ## Konfigurasi environment
 
 ```dotenv
@@ -335,6 +361,24 @@ ditolak. Backend tanpa endpoint statistik menampilkan error, tanpa fallback
 ke maksimum 500 rekaman yang bisa menyesatkan. Specific energy dihitung
 sebagai yield harian kWh dibagi kapasitas PV kWp; kapasitas 0/null tidak diranking.
 Ranking tetap memakai overview harian, terpisah dari periode grafik pilihan.
+
+### Reports pada navigasi utama
+
+Menu **Reports** membuka Report Management tersendiri dengan dropdown dan lima
+tab: **Plant Report**, **Inverter Report**, **PCS Report**, **Battery Report**, dan
+**PV&ESS Report**. Tampilan mengikuti referensi dengan sidebar pencarian PLTS,
+filter, Search, Subscribe, Export, pilihan kolom, sorting, dan pagination 10/20/50.
+Pada mobile, pilihan PLTS dibuka melalui tombol di bawah judul halaman.
+
+Plant/Inverter Report menggunakan adapter API yang sudah ada untuk PLTS pilihan.
+Inverter Report merangkum energi interval per perangkat pada periode pilihan;
+kapasitas string, lifetime yield, specific energy, dan peak power tetap -- sampai
+metrik tersebut tersedia. PCS/Battery/PV&ESS menampilkan kondisi data belum
+tersedia. Scope All belum memuat agregat portofolio. Subscribe membuka informasi
+ketersediaan; CSV mengunduh seluruh hasil filter yang sudah dimuat.
+
+Lihat [tabel kebutuhan API Reports](docs/reports-api-requirements.md) untuk status
+endpoint, kontrak tiap report, definisi kolom, dan urutan integrasi FE–BE.
 
 ## API yang digunakan saat ini
 

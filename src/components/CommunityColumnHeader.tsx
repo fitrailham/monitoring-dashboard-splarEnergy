@@ -1,3 +1,5 @@
+import { translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { IHeaderParams } from "ag-grid-community";
@@ -5,6 +7,7 @@ import type { IHeaderParams } from "ag-grid-community";
 // Only replace the inner label. AG Grid retains its header, sorting, drag/resize,
 // keyboard navigation, and sort indicators around this component.
 export default function CommunityColumnHeader(params: IHeaderParams) {
+  useLanguage();
   const { api, column, displayName, eGridHeader, enableSorting, setSort, showFilter } = params;
   const [open, setOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -27,8 +30,10 @@ export default function CommunityColumnHeader(params: IHeaderParams) {
     return () => {
       column.removeEventListener("filterActiveChanged", refresh);
       column.removeEventListener("sortChanged", refresh);
-      api.removeEventListener("columnVisible", refresh);
-      api.removeEventListener("columnPinned", refresh);
+      if (!api.isDestroyed()) {
+        api.removeEventListener("columnVisible", refresh);
+        api.removeEventListener("columnPinned", refresh);
+      }
     };
   }, [api, column]);
 
@@ -73,7 +78,7 @@ export default function CommunityColumnHeader(params: IHeaderParams) {
     return <button type="button" role="menuitem" disabled={disabled} onClick={() => {
       close(true);
       if (!api.isDestroyed()) run();
-    }}>{label}</button>;
+    }}>{t(label)}</button>;
   }
 
   return <>
@@ -82,8 +87,8 @@ export default function CommunityColumnHeader(params: IHeaderParams) {
       ref={trigger}
       type="button"
       className={`community-header-menu-button${activeFilter ? " filter-active" : ""}`}
-      aria-label={`Column Menu: ${displayName}${activeFilter ? " (filter aktif)" : ""}`}
-      title={`${displayName}${activeFilter ? " · Filter aktif" : ""} · Column Menu`}
+      aria-label={t(`Column Menu: ${displayName}${activeFilter ? " (filter aktif)" : ""}`)}
+      title={t(`${displayName}${activeFilter ? " · Filter aktif" : ""} · Column Menu`)}
       aria-haspopup="menu"
       aria-expanded={open}
       aria-controls={open ? menuId : undefined}
@@ -109,7 +114,7 @@ export default function CommunityColumnHeader(params: IHeaderParams) {
       id={menuId}
       className="community-column-menu"
       role="menu"
-      aria-label={`Column Menu: ${displayName}`}
+      aria-label={t(`Column Menu: ${displayName}`)}
       style={{ width, left, maxHeight, ...(above ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }) }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) close();
@@ -129,7 +134,7 @@ export default function CommunityColumnHeader(params: IHeaderParams) {
           const anchor = trigger.current;
           close();
           if (anchor && !api.isDestroyed()) showFilter(anchor);
-        }}>Column Filter</button>
+        }}>{t("Column Filter")}</button>
         <div className="community-menu-separator" role="separator" />
       </>}
       {enableSorting && <>
@@ -144,8 +149,8 @@ export default function CommunityColumnHeader(params: IHeaderParams) {
       <div className="community-menu-separator" role="separator" />
       {action("Autosize This Column", () => api.autoSizeColumns([column]), Boolean(definition.suppressAutoSize))}
       {action("Autosize All Columns", () => api.autoSizeAllColumns())}
-      <button type="button" role="menuitem" aria-expanded={chooseColumns} onClick={() => setChooseColumns(!chooseColumns)}>Choose Columns</button>
-      {chooseColumns && <div className="community-menu-columns" role="group" aria-label="Kolom yang ditampilkan">
+      <button type="button" role="menuitem" aria-expanded={chooseColumns} onClick={() => setChooseColumns(!chooseColumns)}>{t("Choose Columns")}</button>
+      {chooseColumns && <div className="community-menu-columns" role="group" aria-label={t("Kolom yang ditampilkan")}>
         {api.getColumns()?.map((item) => <button
           key={item.getColId()}
           type="button"

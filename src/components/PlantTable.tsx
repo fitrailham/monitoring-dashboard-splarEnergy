@@ -1,3 +1,5 @@
+import { getLanguage, translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -7,6 +9,7 @@ import {
   ColumnAutoSizeModule,
   CsvExportModule,
   EventApiModule,
+  LocaleModule,
   ModuleRegistry,
   NumberFilterModule,
   PaginationModule,
@@ -51,6 +54,7 @@ ModuleRegistry.registerModules([
   ...(enterpriseEnabled ? [ColumnMenuModule, ColumnsToolPanelModule, ContextMenuModule, ClipboardModule, ExcelExportModule] : []),
   CsvExportModule,
   EventApiModule,
+  LocaleModule,
   TextFilterModule,
   NumberFilterModule,
   PaginationModule,
@@ -127,6 +131,7 @@ export default function PlantTable({
   now: number;
   onAdd?: () => void;
 }) {
+  useLanguage();
   const grid = useRef<AgGridReact<Plant>>(null);
   const [draft, setDraft] = useState(emptyFilters),
     [filters, setFilters] = useState(emptyFilters);
@@ -155,7 +160,7 @@ export default function PlantTable({
               ? p.has_pv ?? (number(p.capacity_kwp) !== null)
               : p.has_ess ?? (number(p.battery_soc_percent) !== null))),
       ),
-    [plants, filters],
+    [plants, filters, getLanguage()],
   );
   const defaultColDef = useMemo<ColDef<Plant>>(
     () => ({
@@ -171,7 +176,7 @@ export default function PlantTable({
       wrapHeaderText: true,
       autoHeaderHeight: true,
     }),
-    [],
+    [getLanguage()],
   );
   const columnDefs = useMemo<ColDef<Plant>[]>(() => {
     const numeric = (
@@ -181,7 +186,7 @@ export default function PlantTable({
       digits = 2,
     ): ColDef<Plant> => ({
       colId: String(key),
-      headerName,
+      headerName: t(headerName),
       width,
       cellDataType: "number",
       filter: "agNumberColumnFilter",
@@ -191,10 +196,10 @@ export default function PlantTable({
       comparator: compareNumbers,
     });
     return [
-      { field: "plant_code", headerName: "Plant Code", initialHide: true },
+      { field: "plant_code", headerName: t("Plant Code"), initialHide: true },
       {
         colId: "status",
-        headerName: "Status",
+        headerName: t("Status"),
         width: 125,
         minWidth: 110,
         valueGetter: (p) => (p.data ? statusLabel[status(p.data)] : ""),
@@ -203,14 +208,14 @@ export default function PlantTable({
             <span
               className={"status-dot " + status(data)}
               role="img"
-              aria-label={statusLabel[status(data)]}
-              title={statusLabel[status(data)]}
+              aria-label={t(statusLabel[status(data)])}
+              title={t(statusLabel[status(data)])}
             />
           ) : null,
       },
       {
         colId: "image",
-        headerName: "Plant Image",
+        headerName: t("Plant Image"),
         width: 115,
         sortable: false,
         filter: false,
@@ -222,13 +227,13 @@ export default function PlantTable({
             className="plant-thumbnail"
             src={data?.image_url || "/solar-plant.svg"}
             onError={(event) => { if (!event.currentTarget.src.endsWith("/solar-plant.svg")) event.currentTarget.src = "/solar-plant.svg"; }}
-            alt={data?.image_url ? `Foto ${data.plant_name}` : "Ilustrasi panel surya"}
+            alt={t(data?.image_url ? `Foto ${data.plant_name}` : "Ilustrasi panel surya")}
           />
         ),
       },
       {
         field: "plant_name",
-        headerName: "Plant Name",
+        headerName: t("Plant Name"),
         minWidth: 215,
         flex: 1,
         initialSort: "asc",
@@ -245,36 +250,36 @@ export default function PlantTable({
       },
       {
         colId: "country",
-        headerName: "Country/Region",
+        headerName: t("Country/Region"),
         width: 175,
         minWidth: 165,
         valueGetter: ({ data }) => data?.country_name ?? data?.country_code ?? "--",
       },
       {
         field: "address",
-        headerName: "Address",
+        headerName: t("Address"),
         width: 300,
         initialHide: true,
         tooltip: ({ data }) => data?.address ?? "",
       },
       {
         colId: "telemetry",
-        headerName: "Umur Telemetry",
+        headerName: t("Umur Telemetry"),
         width: 220,
         valueGetter: ({ data }) => data ? telemetryLabel(telemetryFreshness(data, now)) : "--",
         cellRenderer: ({ data }: ICellRendererParams<Plant>) => {
           if (!data) return null;
           const freshness = telemetryFreshness(data, now);
           return <span className={`telemetry-badge ${freshness.state}`}
-            title={freshness.measuredAt || "Waktu pengukuran perangkat belum terverifikasi"}>
-            {telemetryLabel(freshness)}
+            title={t(freshness.measuredAt || "Waktu pengukuran perangkat belum terverifikasi")}>
+            {t(telemetryLabel(freshness))}
           </span>;
         },
       },
       numeric("capacity_kwp", "Installed PV (kWp)", 145, 3),
       {
         colId: "optimizers",
-        headerName: "Optimizer Quantity",
+        headerName: t("Optimizer Quantity"),
         width: 150,
         minWidth: 140,
         sortable: false,
@@ -294,7 +299,7 @@ export default function PlantTable({
       numeric("pv_power_kw", "Current Power (kW)", 145),
       {
         colId: "specific",
-        headerName: "Specific Energy (kWh/kWp)",
+        headerName: t("Specific Energy (kWh/kWp)"),
         width: 185,
         minWidth: 165,
         cellDataType: "number",
@@ -306,7 +311,7 @@ export default function PlantTable({
       numeric("yield_today_kwh", "Yield Today (kWh)", 145),
       numeric("total_yield_kwh", "Total Yield (kWh)", 155),
     ];
-  }, [onSelect, now]);
+  }, [onSelect, now, getLanguage()]);
   const syncPagination = useCallback(({ api }: { api: GridApi<Plant> }) => {
     if (api.isDestroyed()) return;
     setPagination({
@@ -331,32 +336,26 @@ export default function PlantTable({
           setPage(1);
         }}
       >
-        <label>
-          Plant name
-          <input
-            placeholder="Plant name / code"
+        <label>{t("Plant name")}<input
+            placeholder={t("Plant name / code")}
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           />
         </label>
-        <label>
-          Country/Region
-          <input
-            placeholder="Country/Region"
+        <label>{t("Country/Region")}<input
+            placeholder={t("Country/Region")}
             value={draft.region}
             onChange={(e) => setDraft({ ...draft, region: e.target.value })}
           />
         </label>
-        <label>
-          Device type
-          <select
-            aria-label="Device type"
+        <label>{t("Device type")}<select
+            aria-label={t("Device type")}
             value={draft.type}
             onChange={(e) => setDraft({ ...draft, type: e.target.value })}
           >
-            <option value="">All</option>
-            <option value="pv">PV</option>
-            <option value="ess">ESS installed</option>
+            <option value="">{t("All")}</option>
+            <option value="pv">{t("PV")}</option>
+            <option value="ess">{t("ESS installed")}</option>
           </select>
         </label>
         <button
@@ -365,12 +364,10 @@ export default function PlantTable({
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? "Collapse" : "Expand"}
+          {expanded ? t("Collapse") : t("Expand")}
           <Icon name="chevron" size={13} />
         </button>
-        <button type="submit" className="primary">
-          Search
-        </button>
+        <button type="submit" className="primary">{t("Search")}</button>
         <button
           type="button"
           className="outline"
@@ -381,15 +378,13 @@ export default function PlantTable({
             setColumnFiltersActive(false);
             setPage(1);
           }}
-        >
-          Reset
-        </button>
+        >{t("Reset")}</button>
         <div className="filter-actions">
           <div className="grid-column-controls">
             <button
               type="button"
               className="icon-button"
-              aria-label="Pengaturan kolom tabel"
+              aria-label={t("Pengaturan kolom tabel")}
               aria-expanded={columns}
               onClick={() => setColumns(!columns)}
             >
@@ -404,17 +399,15 @@ export default function PlantTable({
                     onChange={(e) => {
                       grid.current?.api.setColumnsVisible(["address"], e.target.checked);
                     }}
-                  />
-                  Show address
-                </label>
+                  />{t("Show address")}</label>
               </div>
             )}
           </div>
           <button
             type="button"
             className="icon-button"
-            title="Refresh data"
-            aria-label="Refresh data"
+            title={t("Refresh data")}
+            aria-label={t("Refresh data")}
             disabled={loading}
             onClick={onRefresh}
           >
@@ -429,29 +422,23 @@ export default function PlantTable({
             className="outline export-button"
             onClick={download}
           >
-            <Icon name="download" size={15} />
-            Export
-          </button>
+            <Icon name="download" size={15} />{t("Export")}</button>
           <button
             type="button"
             className="primary"
             disabled={!onAdd}
             onClick={onAdd}
-            title="Daftarkan PLTS pada sistem monitoring lokal"
-          >
-            Add Plant
-          </button>
+            title={t("Daftarkan PLTS pada sistem monitoring lokal")}
+          >{t("Add Plant")}</button>
         </div>
         {expanded && (
           <div className="expanded-filters">
-            <label>
-              Status
-              <select
-                aria-label="Status"
+            <label>{t("Status")}<select
+                aria-label={t("Status")}
                 value={draft.state}
                 onChange={(e) => setDraft({ ...draft, state: e.target.value })}
               >
-                <option value="">All statuses</option>
+                <option value="">{t("All statuses")}</option>
                 {(
                   [
                     "normal",
@@ -461,15 +448,13 @@ export default function PlantTable({
                   ] as PlantStatus[]
                 ).map((s) => (
                   <option key={s} value={s}>
-                    {statusLabel[s]}
+                    {t(statusLabel[s])}
                   </option>
                 ))}
               </select>
             </label>
             <span>
-              <Icon name="info" size={15} />
-              Unknown berarti backend belum menyediakan status operasional.
-            </span>
+              <Icon name="info" size={15} />{t("Unknown berarti backend belum menyediakan status operasional.")}</span>
           </div>
         )}
       </form>
@@ -477,9 +462,10 @@ export default function PlantTable({
       <div
         className={`plant-ag-grid${enterpriseEnabled ? "" : " plant-grid-community"}`}
         role="region"
-        aria-label="Tabel monitoring PLTS"
+        aria-label={t("Tabel monitoring PLTS")}
       >
         <AgGridReact<Plant>
+          getLocaleText={({ defaultValue }) => t(defaultValue)}
           ref={grid}
           theme={gridTheme}
           rowData={filtered}
@@ -527,16 +513,15 @@ export default function PlantTable({
         />
       </div>
       <footer className="table-footer">
-        <span>
-          Total: <strong>{pagination.total}</strong>{" "}
+        <span>{t("Total: ")}<strong>{pagination.total}</strong>{" "}
           {filters.name || filters.region || filters.type || filters.state || columnFiltersActive
-            ? `dari ${plants.length} PLTS`
+            ? t(`dari ${plants.length} PLTS`)
             : ""}
         </span>
         <div className="pagination">
           <button
             className="page-arrow"
-            aria-label="Halaman sebelumnya"
+            aria-label={t("Halaman sebelumnya")}
             disabled={activePage === 1}
             onClick={() => setPage(activePage - 1)}
           >
@@ -556,7 +541,7 @@ export default function PlantTable({
                   <span className="page-ellipsis">…</span>
                 )}
                 <button
-                  aria-label={`Halaman ${p}`}
+                  aria-label={t(`Halaman ${p}`)}
                   aria-current={activePage === p ? "page" : undefined}
                   className={activePage === p ? "page active" : "page"}
                   onClick={() => setPage(p)}
@@ -567,14 +552,14 @@ export default function PlantTable({
             ))}
           <button
             className="page-arrow"
-            aria-label="Halaman berikutnya"
+            aria-label={t("Halaman berikutnya")}
             disabled={activePage === pages}
             onClick={() => setPage(activePage + 1)}
           >
             ›
           </button>
           <select
-            aria-label="Jumlah baris per halaman"
+            aria-label={t("Jumlah baris per halaman")}
             value={size}
             onChange={(e) => {
               setSize(Number(e.target.value));
@@ -583,8 +568,7 @@ export default function PlantTable({
           >
             {[10, 20, 50].map((n) => (
               <option key={n} value={n}>
-                {n} / page
-              </option>
+                {n}{t(" / page")}</option>
             ))}
           </select>
           <form
@@ -602,10 +586,8 @@ export default function PlantTable({
               }
             }}
           >
-            <label>
-              Go to
-              <input
-                aria-label="Nomor halaman"
+            <label>{t("Go to")}<input
+                aria-label={t("Nomor halaman")}
                 type="number"
                 min="1"
                 max={pages}
@@ -613,7 +595,7 @@ export default function PlantTable({
                 onChange={(e) => setGoTo(e.target.value)}
               />
             </label>
-            <button type="submit">Page</button>
+            <button type="submit">{t("Page")}</button>
           </form>
         </div>
       </footer>

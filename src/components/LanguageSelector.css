@@ -1,0 +1,19 @@
+.language-selector { position: relative; flex-shrink: 0; }
+.app-header .header-utilities .language-trigger { display: flex; align-items: center; gap: 6px; padding: 8px 0; min-height: 34px; font-size: 13px; color: #ddd; }
+.language-short-name { display: none; }
+.language-options { position: absolute; top: calc(100% + 5px); right: 0; min-width: 204px; padding: 8px; color: #172d43; background: #fff; border: 1px solid #e1e5eb; border-radius: 7px; box-shadow: 0 7px 24px #0002; z-index: 1600; }
+.language-options > strong { display: block; padding: 8px 10px 10px; font-size: 12px; color: #84909e; font-weight: 500; }
+.app-header .header-utilities .language-selector .language-options button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 38px; padding: 8px 10px; color: #243b52; text-align: left; border-radius: 4px; font-size: 13px; }
+.app-header .header-utilities .language-selector .language-options button:hover { background: #f2f7ff; color: #0866ff; }
+.app-header .header-utilities .language-selector .language-options button[aria-pressed="true"] { background: #edf5ff; color: #0866ff; }
+@media (max-width: 1250px) {
+  .language-full-name { display: none; }
+  .language-short-name { display: inline; }
+}
+@media (max-width: 700px) {
+  .app-header .header-utilities .language-trigger { font-size: 11px; gap: 4px; }
+  .language-trigger > svg { width: 16px; height: 16px; }
+  .language-options { right: 0; top: calc(100% + 7px); }
+  .app-header .main-nav { gap: 12px; }
+  .app-header .header-utilities { margin-left: 0; }
+}

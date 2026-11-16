@@ -1,3 +1,5 @@
+import { getLanguage, translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import type { Plant } from "../services/fleet";
@@ -29,6 +31,7 @@ const TEMPLATES: { name: string; description: string; series: SeriesKey[] }[] = 
 interface TrendResponse { key: string; power: PowerPoint[]; energy: YieldResult | null; error: string; complete?: boolean }
 
 export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Plant; now: number; refreshKey: number }) {
+  useLanguage();
   const zone = validTimeZone(plant?.time_zone), code = plant?.plant_code ?? "";
   const [mode, setMode] = useState<"energy" | "custom">("energy");
   const [period, setPeriod] = useState<Period>("Day"), [date, setDate] = useState(() => calendarDate(now, zone));
@@ -70,23 +73,23 @@ export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Pl
     overlays: { noData: { enabled: false } },
     legend: { position: "bottom", spacing: 28, item: { label: { color: "#747d89", fontSize: 12 } } },
     series: SERIES.filter((series) => enabled.includes(series.key)).map((series) => ({
-      type: "line", xKey: "label", yKey: series.key, yName: series.name,
+      type: "line", xKey: "label", yKey: series.key, yName: t(series.name),
       stroke: series.color, strokeWidth: 1.8, marker: { enabled: false }, connectMissingData: false,
-      tooltip: { renderer: ({ datum }) => ({ title: datum.label, data: [{ label: series.name, value: `${datum[series.key] ?? "--"} kW` }] }) },
+      tooltip: { renderer: ({ datum }) => ({ title: datum.label, data: [{ label: t(series.name), value: `${datum[series.key] ?? "--"} kW` }] }) },
     })),
     axes: {
       x: { type: "category", position: "bottom", label: { fontSize: 11, color: "#9aa3af", avoidCollisions: true }, line: { stroke: "#a4acb7" }, tick: { enabled: false } },
       y: { type: "number", position: "left", title: { text: "kW", color: "#9aa3af", fontSize: 11 }, label: { color: "#9aa3af", fontSize: 11 }, gridLine: { style: [{ stroke: "#e0e2e6" }] }, line: { enabled: false }, tick: { enabled: false } },
     },
-  }), [power, enabled]);
+  }), [power, enabled, getLanguage()]);
   const barOptions = useMemo<AgCartesianChartOptions<ChartPoint>>(() => ({
     data: energy, background: { fill: "transparent" }, animation: { enabled: false },
     padding: { top: 16, left: 12, right: 24, bottom: 10 }, overlays: { noData: { enabled: false } },
     legend: { position: "bottom", spacing: 28 },
-    series: [{ type: "bar", xKey: "label", yKey: "value", yName: "PV energy", fill: "#55cd91", strokeWidth: 0 }],
+    series: [{ type: "bar", xKey: "label", yKey: "value", yName: t("PV energy"), fill: "#55cd91", strokeWidth: 0 }],
     axes: { x: { type: "category", position: "bottom", label: { fontSize: 11, color: "#9aa3af" } },
       y: { type: "number", position: "left", min: 0, title: { text: "kWh", color: "#9aa3af", fontSize: 11 }, gridLine: { style: [{ stroke: "#e0e2e6" }] } } },
-  }), [energy]);
+  }), [energy, getLanguage()]);
   function choosePeriod(value: Period) {
     setPeriod(value);
     if (value !== "Day" && !enabled.includes("pv")) setEnabled([...enabled, "pv"]);
@@ -110,25 +113,25 @@ export default function MonitoringTrend({ plant, now, refreshKey }: { plant?: Pl
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return <div className="monitor-trend-page"><section className="monitor-trend-panel" aria-label="Monitoring Trend">
-    <header className="trend-panel-header"><div className="trend-subtabs" role="group" aria-label="Jenis trend"><button className={mode === "energy" ? "active" : ""} aria-pressed={mode === "energy"} onClick={() => setMode("energy")}>Energy Trend</button><button className={mode === "custom" ? "active" : ""} aria-pressed={mode === "custom"} onClick={() => setMode("custom")}>Custom</button></div><div className="trend-header-actions"><button onClick={() => setTemplatesOpen(true)}>Templates</button><button disabled={!hasData || loading || Boolean(active?.error)} onClick={download}>Export</button></div></header>
-    <div className="trend-period-row"><div className="trend-period-toggle" role="group" aria-label="Periode trend">{(["Day", "Month", "Year", "Lifetime"] as Period[]).map((value) => <button key={value} className={period === value ? "active" : ""} aria-pressed={period === value} onClick={() => choosePeriod(value)}>{value === "Lifetime" ? "Lifecycle" : value}</button>)}</div>
-      {period === "Lifetime" ? <span className="trend-lifecycle-range">1970–{calendarDate(now, zone).slice(0, 4)}</span> : <input className="trend-date" aria-label="Tanggal trend" type={period === "Day" ? "date" : period === "Month" ? "month" : "number"}
+  return <div className="monitor-trend-page"><section className="monitor-trend-panel" aria-label={t("Monitoring Trend")}>
+    <header className="trend-panel-header"><div className="trend-subtabs" role="group" aria-label={t("Jenis trend")}><button className={mode === "energy" ? "active" : ""} aria-pressed={mode === "energy"} onClick={() => setMode("energy")}>{t("Energy Trend")}</button><button className={mode === "custom" ? "active" : ""} aria-pressed={mode === "custom"} onClick={() => setMode("custom")}>{t("Custom")}</button></div><div className="trend-header-actions"><button onClick={() => setTemplatesOpen(true)}>{t("Templates")}</button><button disabled={!hasData || loading || Boolean(active?.error)} onClick={download}>{t("Export")}</button></div></header>
+    <div className="trend-period-row"><div className="trend-period-toggle" role="group" aria-label={t("Periode trend")}>{(["Day", "Month", "Year", "Lifetime"] as Period[]).map((value) => <button key={value} className={period === value ? "active" : ""} aria-pressed={period === value} onClick={() => choosePeriod(value)}>{value === "Lifetime" ? t("Lifecycle") : t(value)}</button>)}</div>
+      {period === "Lifetime" ? <span className="trend-lifecycle-range">1970–{calendarDate(now, zone).slice(0, 4)}</span> : <input className="trend-date" aria-label={t("Tanggal trend")} type={period === "Day" ? "date" : period === "Month" ? "month" : "number"}
         value={period === "Day" ? date : period === "Month" ? date.slice(0, 7) : date.slice(0, 4)}
         min={period === "Day" ? "1970-01-01" : period === "Month" ? "1970-01" : "1970"}
         max={period === "Day" ? "2100-12-31" : period === "Month" ? "2100-12" : "2100"}
         onChange={(event) => { const value = event.target.value; if (!value || !event.target.validity.valid || period === "Year" && value.length !== 4) return;
           setDate(period === "Day" ? value : period === "Month" ? value + "-01" : value + "-01-01"); }} />}
     </div>
-    {mode === "custom" && <div className="trend-custom-controls"><span>Seri grafik</span>{SERIES.map((series) => <label key={series.key}><input type="checkbox" checked={period === "Day" ? enabled.includes(series.key) : series.key === "pv"} disabled={period !== "Day" || enabled.includes(series.key) && enabled.length === 1} onChange={(event) => setEnabled(event.target.checked ? [...enabled, series.key] : enabled.filter((key) => key !== series.key))} /><i style={{ background: series.color }} />{series.name}</label>)}{period !== "Day" && <small>Periode energi saat ini menyediakan PV energy saja.</small>}</div>}
-    <div className="trend-chart-title"><h1>{mode === "energy" ? "Energy Trend" : "Custom Trend"}</h1><span>{plant?.plant_name ?? "Pilih PLTS melalui daftar di sisi kiri"}</span></div>
+    {mode === "custom" && <div className="trend-custom-controls"><span>{t("Seri grafik")}</span>{SERIES.map((series) => <label key={series.key}><input type="checkbox" checked={period === "Day" ? enabled.includes(series.key) : series.key === "pv"} disabled={period !== "Day" || enabled.includes(series.key) && enabled.length === 1} onChange={(event) => setEnabled(event.target.checked ? [...enabled, series.key] : enabled.filter((key) => key !== series.key))} /><i style={{ background: series.color }} />{t(series.name)}</label>)}{period !== "Day" && <small>{t("Periode energi saat ini menyediakan PV energy saja.")}</small>}</div>}
+    <div className="trend-chart-title"><h1>{mode === "energy" ? t("Energy Trend") : t("Custom Trend")}</h1><span>{plant?.plant_name ?? t("Pilih PLTS melalui daftar di sisi kiri")}</span></div>
     <div className="trend-chart-stage" aria-busy={loading}>{period === "Day" ? <MonitoringLineChart options={lineOptions} /> : <DashboardBarChart options={barOptions} />}
-      {(!hasData || loading || active?.error) && <div className="trend-chart-overlay"><Icon name={loading ? "refresh" : "chart"} size={34} /><strong>{loading ? "Memuat data trend…" : active?.error ? "Data trend belum dapat dimuat" : "Belum ada data pengukuran terverifikasi"}</strong><p>{active?.error || (code ? "Periksa periode atau pilih PLTS lain." : "Buka daftar PLTS dengan tombol di sisi kiri.")}</p>{active?.error && <button onClick={() => setRetry((value) => value + 1)}>Coba lagi</button>}</div>}
+      {(!hasData || loading || t(active?.error)) && <div className="trend-chart-overlay"><Icon name={loading ? "refresh" : "chart"} size={34} /><strong>{loading ? t("Memuat data trend…") : active?.error ? t("Data trend belum dapat dimuat") : t("Belum ada data pengukuran terverifikasi")}</strong><p>{t(active?.error) || (code ? t("Periksa periode atau pilih PLTS lain.") : t("Buka daftar PLTS dengan tombol di sisi kiri."))}</p>{t(active?.error) && <button onClick={() => setRetry((value) => value + 1)}>{t("Coba lagi")}</button>}</div>}
     </div>
-    <p className="trend-data-note">{zone} · {period === "Day" ? "Daya dari API rentang tanggal, pembacaan terakhir per 5 menit. Gap tidak diinterpolasi; tanda jaringan mengikuti verifikasi backend." : "Energi interval PV untuk seluruh rentang pilihan; periode tanpa data dibiarkan kosong."}</p>
-    {period === "Day" && active?.complete === false && <p className="trend-partial-note" role="status">Cakupan daya masih parsial; kualitas diperiksa per metrik dan data kosong tidak diubah menjadi nol.</p>}
-    {active?.energy && !active.energy.complete && <p className="trend-partial-note" role="status">Data parsial: {active.energy.completeBuckets}/{active.energy.elapsedBuckets} interval lengkap.{active.energy.truncated ? " Backend belum mengembalikan seluruh rentang." : ""}</p>}
+    <p className="trend-data-note">{zone} · {period === "Day" ? t("Daya dari API rentang tanggal, pembacaan terakhir per 5 menit. Gap tidak diinterpolasi; tanda jaringan mengikuti verifikasi backend.") : t("Energi interval PV untuk seluruh rentang pilihan; periode tanpa data dibiarkan kosong.")}</p>
+    {period === "Day" && active?.complete === false && <p className="trend-partial-note" role="status">{t("Cakupan daya masih parsial; kualitas diperiksa per metrik dan data kosong tidak diubah menjadi nol.")}</p>}
+    {active?.energy && !active.energy.complete && <p className="trend-partial-note" role="status">{t("Data parsial: ")}{active.energy.completeBuckets}/{active.energy.elapsedBuckets}{t(" interval lengkap.")}{active.energy.truncated ? t(" Backend belum mengembalikan seluruh rentang.") : ""}</p>}
   </section>
-    <dialog ref={templates} className="layout-dialog trend-template-dialog" aria-labelledby="trend-templates-title" onCancel={() => setTemplatesOpen(false)}><div className="layout-dialog-heading"><h2 id="trend-templates-title">Trend Templates</h2><button aria-label="Tutup Templates" onClick={() => setTemplatesOpen(false)}><Icon name="close" size={18} /></button></div><p>Pilih konfigurasi seri daya harian untuk PLTS yang aktif.</p><div className="trend-template-list">{TEMPLATES.map((template) => <button key={template.name} onClick={() => { setEnabled([...template.series]); setPeriod("Day"); setMode(template.name === "Energy Overview" ? "energy" : "custom"); setTemplatesOpen(false); }}><Icon name="chart" size={22} /><span><strong>{template.name}</strong><small>{template.description}</small></span><Icon name="chevron" size={15} /></button>)}</div><footer><button onClick={() => setTemplatesOpen(false)}>Cancel</button></footer></dialog>
+    <dialog ref={templates} className="layout-dialog trend-template-dialog" aria-labelledby="trend-templates-title" onCancel={() => setTemplatesOpen(false)}><div className="layout-dialog-heading"><h2 id="trend-templates-title">{t("Trend Templates")}</h2><button aria-label={t("Tutup Templates")} onClick={() => setTemplatesOpen(false)}><Icon name="close" size={18} /></button></div><p>{t("Pilih konfigurasi seri daya harian untuk PLTS yang aktif.")}</p><div className="trend-template-list">{TEMPLATES.map((template) => <button key={template.name} onClick={() => { setEnabled([...template.series]); setPeriod("Day"); setMode(template.name === "Energy Overview" ? "energy" : "custom"); setTemplatesOpen(false); }}><Icon name="chart" size={22} /><span><strong>{t(template.name)}</strong><small>{t(template.description)}</small></span><Icon name="chevron" size={15} /></button>)}</div><footer><button onClick={() => setTemplatesOpen(false)}>{t("Cancel")}</button></footer></dialog>
   </div>;
 }

@@ -1,3 +1,5 @@
+import { translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
 import { useEffect, useRef, useState } from "react";
 import { calendarDate } from "../services/calendar";
 import { statisticsRange } from "../services/statistics";
@@ -8,6 +10,7 @@ import { trendCsv } from "../services/monitoring";
 export default function DevicePerformanceDialog({ code, device, zone, onClose }: {
   code: string; device: InventoryDevice; zone: string; onClose: () => void;
 }) {
+  useLanguage();
   const [today] = useState(() => calendarDate(Date.now(), zone));
   const [start, setStart] = useState(today), [end, setEnd] = useState(today);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
@@ -33,13 +36,13 @@ export default function DevicePerformanceDialog({ code, device, zone, onClose }:
     finally { if (!controller.signal.aborted) setBusy(false); }
   }
   return <dialog ref={dialog} className="layout-dialog" aria-labelledby="performance-title" onCancel={onClose}>
-    <div className="layout-dialog-heading"><h2 id="performance-title">Export Performance Data</h2><button aria-label="Tutup ekspor performa" onClick={onClose}>×</button></div>
+    <div className="layout-dialog-heading"><h2 id="performance-title">{t("Export Performance Data")}</h2><button aria-label={t("Tutup ekspor performa")} onClick={onClose}>{t("×")}</button></div>
     <form onSubmit={(event) => { event.preventDefault(); void download(); }}>
-      <p>{device.name} · {zone} · Maksimum 31 hari. Ekspor mencakup seluruh halaman riwayat perangkat.</p>
-      <label>Start date<input type="date" required value={start} max={end} disabled={busy} onChange={(event) => setStart(event.target.value)} /></label>
-      <label>End date<input type="date" required value={end} min={start} disabled={busy} onChange={(event) => setEnd(event.target.value)} /></label>
-      {message && <p role="status">{message}</p>}
-      <footer><button type="button" onClick={onClose}>Close</button><button className="layout-save" disabled={busy}>{busy ? "Memuat seluruh halaman…" : "Export CSV"}</button></footer>
+      <p>{device.name} · {zone}{t(" · Maksimum 31 hari. Ekspor mencakup seluruh halaman riwayat perangkat.")}</p>
+      <label>{t("Start date")}<input type="date" required value={start} max={end} disabled={busy} onChange={(event) => setStart(event.target.value)} /></label>
+      <label>{t("End date")}<input type="date" required value={end} min={start} disabled={busy} onChange={(event) => setEnd(event.target.value)} /></label>
+      {t(message) && <p role="status">{t(message)}</p>}
+      <footer><button type="button" onClick={onClose}>{t("Close")}</button><button className="layout-save" disabled={busy}>{busy ? t("Memuat seluruh halaman…") : t("Export CSV")}</button></footer>
     </form>
   </dialog>;
 }

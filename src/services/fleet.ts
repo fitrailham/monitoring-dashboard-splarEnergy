@@ -1,3 +1,5 @@
+import { getLocale } from "../i18n/language.ts";
+
 export const API_BASE = (
   import.meta.env?.VITE_API_URL?.trim() || "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
@@ -155,7 +157,7 @@ export function format(value: Numeric | undefined, digits = 2) {
   const parsed = number(value);
   return parsed === null
     ? "--"
-    : new Intl.NumberFormat("en-US", {
+    : new Intl.NumberFormat(getLocale(), {
         maximumFractionDigits: digits,
         minimumFractionDigits: digits,
       }).format(parsed);

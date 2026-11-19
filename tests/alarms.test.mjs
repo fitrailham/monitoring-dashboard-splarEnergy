@@ -1,13 +1,39 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { alarmFiltersHaveCoverage, alarmTimestamp, EMPTY_ALARM_FILTERS, enrichAlarmDevices, filterAlarms, formatAlarmTime,
-  getAlarmSnapshot, normalizeAlarms, sortAlarms, validAlarmRange } from "../src/services/alarms.ts";
+  getAlarmSnapshot, getFleetAlarmPage, normalizeAlarms, sortAlarms, validAlarmRange } from "../src/services/alarms.ts";
 import { normalizeDevices } from "../src/services/devices.ts";
 
 const raw = (overrides = {}) => ({ alarm_id: "A1", vendor_alarm_id: "V1", plant_code: "P1", device_id: "D1",
   severity: "major", state: "active", acknowledged: false, name: "Grid issue", occurred_at: "2026-11-11T17:00:30Z", ...overrides });
 const envelope = (rows = [], overrides = {}) => ({ success: true, configured: true, quality: "fresh", total: rows.length,
   data: rows, coverage: { complete: true }, meta: { is_partial: false }, ...overrides });
+
+test("fleet alarms preserve plant identity and total on a short final page", async (t) => {
+  t.mock.method(globalThis, "fetch", async (input) => {
+    const url = new URL(input);
+    assert.equal(url.pathname, "/api/alarms");
+    assert.deepEqual(Object.fromEntries(url.searchParams), { state: "active", page: "2", page_size: "8" });
+    return Response.json(envelope([raw({ plant_code: "P2", plant_name: "Plant 2" })], { total: 9 }));
+  });
+  const result = await getFleetAlarmPage(2, 8);
+  assert.equal(result.complete, true);
+  assert.equal(result.total, 9);
+  assert.equal(result.alarms[0].plantCode, "P2");
+  assert.equal(result.alarms[0].plantName, "Plant 2");
+});
+
+test("fleet alarms exclude invalid rows and preserve an unavailable total", async (t) => {
+  const mock = t.mock.method(globalThis, "fetch", async () => Response.json(envelope([
+    raw({ plant_code: null }), raw({ state: "cleared" }), raw(),
+  ])));
+  const partial = await getFleetAlarmPage(1, 8);
+  assert.equal(partial.complete, false);
+  assert.equal(partial.alarms.length, 1);
+  mock.mock.restore();
+  t.mock.method(globalThis, "fetch", async () => Response.json(envelope([], { configured: false, total: null })));
+  assert.deepEqual(await getFleetAlarmPage(1, 8), { alarms: [], configured: false, complete: false, total: null });
+});
 
 test("alarm normalization preserves zero IDs and does not equate acknowledged with cleared", () => {
   const [alarm] = normalizeAlarms([raw({ alarm_id: 0, device_sn: "00012", acknowledged: true, state: null, severity: "vendor-1" })], "P1", "Plant 1");

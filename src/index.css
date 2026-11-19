@@ -424,6 +424,17 @@ input::-webkit-inner-spin-button {
   gap: 8px;
   letter-spacing: -0.5px;
 }
+.summary-title-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.summary-title-label button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
 .summary-title button {
   color: #9bafbf;
   padding: 0;
@@ -681,6 +692,11 @@ input::-webkit-inner-spin-button {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+.plant-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .expand-button {
   margin: 0 3px 0 10px;
@@ -1930,13 +1946,9 @@ input::-webkit-inner-spin-button {
     grid-template-columns: 1.1fr 1fr 1fr;
   }
   .kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     row-gap: 14px;
     padding-top: 0;
-  }
-  .fleet-kpi:nth-child(3),
-  .fleet-kpi:nth-child(5) {
-    display: none;
   }
   .summary-kpis .summary-title {
     margin-bottom: 21px;
@@ -2113,10 +2125,6 @@ input::-webkit-inner-spin-button {
     grid-template-columns: 1fr 1fr;
     gap: 17px 14px;
   }
-  .fleet-kpi:nth-child(3),
-  .fleet-kpi:nth-child(5) {
-    display: flex;
-  }
   .fleet-kpi > div > span {
     font-size: 10px;
   }
@@ -2134,9 +2142,6 @@ input::-webkit-inner-spin-button {
   }
   .summary-title h2 {
     font-size: 14px;
-  }
-  .summary-status .summary-title button {
-    display: none;
   }
   .donut-layout {
     align-items: center;
@@ -2183,13 +2188,16 @@ input::-webkit-inner-spin-button {
     flex: 1 0 43%;
     max-width: 48%;
   }
-  .filter-form .expand-button {
-    margin: 17px 0 0 3px;
+  .plant-search-actions {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
+  .plant-search-actions .expand-button {
+    margin: 0;
     font-size: 11px;
   }
-  .filter-form > .primary,
-  .filter-form > .outline {
-    margin-top: 15px;
+  .plant-search-actions > .primary,
+  .plant-search-actions > .outline {
     height: 32px;
     font-size: 12px;
     padding: 0 13px;
@@ -2203,9 +2211,6 @@ input::-webkit-inner-spin-button {
   .filter-actions .icon-button,
   .filter-actions .export-button {
     display: inline-flex;
-  }
-  .filter-actions .primary {
-    display: none;
   }
   .expanded-filters {
     gap: 10px;
@@ -2228,6 +2233,9 @@ input::-webkit-inner-spin-button {
   }
   .pagination {
     margin-left: auto;
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .page {
     width: 27px;
@@ -2519,18 +2527,7 @@ input::-webkit-inner-spin-button {
   .filter-form > label:nth-child(3) {
     grid-column: 1;
   }
-  .filter-form .expand-button {
-    margin: 0;
-    align-self: end;
-    height: 33px;
-    justify-content: flex-end;
-    padding-right: 5px;
-  }
-  .filter-form > .primary,
-  .filter-form > .outline {
-    margin: 0;
-    height: 33px;
-  }
+  .plant-search-actions,
   .filter-actions,
   .expanded-filters {
     grid-column: 1/-1;
@@ -3098,7 +3095,7 @@ input::-webkit-inner-spin-button {
 @media (max-width: 520px) { .plant-monitoring { grid-template-columns: minmax(0,1fr); } .monitor-sidebar { position: relative; height: 175px; border-bottom: 1px solid #e1e4e8; border-right: 0; } .monitor-plant-list { display: flex; flex-wrap: wrap; gap: 4px; } .monitor-plant-list > button { width: calc(50% - 3px); min-height: 26px; } .monitor-sidebar-toggle { top: 164px; left: auto; right: 10px; border: 1px solid #e0e4e9; width: 28px; height: 24px; border-radius: 4px; transform: rotate(90deg); } .sidebar-collapsed .monitor-sidebar { display: none; } .sidebar-collapsed .monitor-sidebar-toggle { top: 2px; } .monitor-kpis { padding: 16px; grid-template-columns: repeat(2,minmax(0,1fr)); } .monitor-plant-header { min-height: 75px; } .monitor-heading-icon { width: 28px; height: 28px; } .monitor-chart-tools { width: 100%; } .monitor-date-control input { width: 126px; } .monitor-tabs { padding-right: 35px; } .monitor-card { border-radius: 9px; } }
 .main-overview { background: #071c2d; }
 .main-overview > .connection-banner { margin: 0; border-radius: 0; }
-.view-switcher.on-overview { top: 77px; right: 14px; z-index: 1100; }
+.view-switcher.on-overview { top: 77px; right: 14px; }
 .home-command {
   --command-side: clamp(255px, 18.2vw, 310px);
   position: relative;
@@ -3269,11 +3266,21 @@ input::-webkit-inner-spin-button {
   font-size: 13px;
 }
 .plant-ag-grid .ag-header-cell-text {
-  line-height: 1.3;
+  display: -webkit-box;
+  line-height: 1.25;
   min-width: 0;
+  overflow: hidden;
   white-space: normal;
-  word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.plant-ag-grid .ag-header-cell { padding-inline: 8px; }
+.plant-ag-grid .ag-sort-indicator-container {
+  gap: 0;
+}
+.plant-ag-grid .ag-sort-indicator-icon {
+  padding-inline: 2px;
 }
 .plant-ag-grid .ag-header-cell-menu-button,
 .community-header-menu-button {
@@ -3308,18 +3315,19 @@ input::-webkit-inner-spin-button {
   background: #0866ff;
 }
 .plant-grid-community .ag-header-cell-label {
-  padding-inline-end: 30px;
+  padding-inline-end: 18px;
 }
 .community-header-menu-button {
   position: absolute;
   top: 50%;
-  inset-inline-end: 7px;
+  inset-inline-end: 2px;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  font-size: 21px;
+  width: 18px;
+  font-size: 18px;
   line-height: 1;
   color: #425166;
 }
@@ -3461,12 +3469,16 @@ input::-webkit-inner-spin-button {
   border: 0;
 }
 
-/* Give coverage labels room at every dashboard breakpoint. */
 .portfolio-app .fleet-summary {
   height: auto;
-  min-height: 345px;
+  min-height: 313px;
   row-gap: 20px;
 }
+.portfolio-app .fleet-kpi > div > span { white-space: normal; }
+.plant-table-card .column-menu { min-width: max-content; }
+.plant-table-card .column-menu label + label { margin-top: 7px; }
+.plant-table-card .column-menu input { width: 15px; margin: 0; }
+.plant-table-card .filter-actions .grid-column-controls .icon-button { display: inline-flex; }
 .kpi-coverage {
   display: block;
   margin-top: 5px;

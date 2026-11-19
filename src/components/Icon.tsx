@@ -27,8 +27,16 @@ type IconName =
   | "check"
   | "lock"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "building"
+  | "device"
+  | "edit"
+  | "trash";
 const paths: Record<IconName, string> = {
+  building: "M3 21h18M5 21V4h10v17M15 10h4v11M8 8h4M8 12h4M8 16h4",
+  device: "M4 4h16v6H4V4ZM4 14h16v6H4v-6ZM7 7h.01M7 17h.01M11 7h6M11 17h6",
+  edit: "m4 16 12-12 4 4L8 20H4ZM13 7l4 4",
+  trash: "M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7",
   lock: "M5 10h14v11H5V10ZM8 10V6a4 4 0 0 1 8 0v4M12 14v3",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
   "eye-off": "m3 3 18 18M10 5.2A12 12 0 0 1 12 5c6 0 10 7 10 7a20 20 0 0 1-3 3.8M6.5 6.5A20 20 0 0 0 2 12s4 7 10 7a12 12 0 0 0 5.5-1.5M10 10a3 3 0 0 0 4 4",

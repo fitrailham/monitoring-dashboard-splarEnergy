@@ -4,8 +4,8 @@ export interface PlantFormValues {
   code: string; name: string; capacity: string; country: string; region: string; city: string;
   address: string; zone: string; latitude: string; longitude: string;
 }
-export async function savePlant(values: PlantFormValues, token: string, existingCode?: string, signal?: AbortSignal) {
-  if (!token.trim()) throw new Error("Masukkan token izin tulis.");
+export async function savePlant(values: PlantFormValues, csrfToken: string, existingCode?: string, signal?: AbortSignal) {
+  if (!csrfToken.trim()) throw new Error("The session token is missing. Sign in again.");
   const capacity = Number(values.capacity);
   if (!values.capacity.trim() || !Number.isFinite(capacity) || capacity <= 0) throw new Error("Kapasitas PV harus lebih besar dari nol.");
   try { new Intl.DateTimeFormat("en", {timeZone: values.zone}); } catch { throw new Error("Timezone PLTS tidak valid."); }
@@ -16,7 +16,7 @@ export async function savePlant(values: PlantFormValues, token: string, existing
     region: values.region.trim() || null, city: values.city.trim() || null, time_zone: values.zone, latitude, longitude};
   if (!existingCode && (!values.code.trim() || !values.name.trim())) throw new Error("Kode dan nama PLTS wajib diisi.");
   return request<Partial<Plant>>(existingCode ? `/api/database/plants/${encodeURIComponent(existingCode)}` : "/api/database/plants", signal, {
-    method: existingCode ? "PATCH" : "POST", token: token.trim(),
+    method: existingCode ? "PATCH" : "POST", csrfToken,
     body: existingCode ? body : {...body, plant_code: values.code.trim(), plant_name: values.name.trim(), address: values.address.trim() || null},
   });
 }

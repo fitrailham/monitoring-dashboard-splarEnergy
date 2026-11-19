@@ -1,6 +1,4 @@
-const API_URL = (
-  import.meta.env.VITE_API_URL?.trim() || "http://127.0.0.1:8000"
-).replace(/\/+$/, "");
+import { request } from "./http";
 
 interface PlantRow {
   plant_code: string;
@@ -38,31 +36,15 @@ function toNumber(value: number | string | null): number | null {
 }
 
 export async function getDashboardData(plantCode: string) {
-  console.log("[API 1/4] Connecting to PostgreSQL backend...");
-
-  const response = await fetch(`${API_URL}/api/database/overview`).catch(() => {
-    throw new DashboardApiError(
-      `Backend tidak dapat dihubungi di ${API_URL}. Jalankan backend atau atur VITE_API_URL di .env.`
-    );
+  const result = await request<PlantRow[]>("/api/database/overview").catch((error: unknown) => {
+    throw new DashboardApiError(error instanceof Error ? error.message : "Invalid database response");
   });
-
-  console.log("[API 2/4] HTTP Status:", response.status);
-
-  if (!response.ok) {
-    throw new DashboardApiError(
-      `Database API HTTP ${response.status}`
-    );
-  }
-
-  const result = await response.json();
-
-  if (!result.success || !Array.isArray(result.data)) {
+  if (!Array.isArray(result.data)) {
     throw new DashboardApiError(
       result.message || "Invalid database response"
     );
   }
 
-  console.log("[API 3/4] Total plants:", result.data.length);
 
   const plant: PlantRow | undefined = result.data.find(
     (item: PlantRow) => item.plant_code === plantCode
@@ -97,8 +79,6 @@ export async function getDashboardData(plantCode: string) {
     essChargeToday: toNumber(plant.ess_charge_today_kwh),
     essDischargeToday: toNumber(plant.ess_discharge_today_kwh),
   };
-
-  console.log("[API 4/4] ✅ Dashboard data ready:", data);
 
   return {
     data,

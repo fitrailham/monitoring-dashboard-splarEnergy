@@ -51,22 +51,18 @@ belum ada agar konfigurasi lokal tidak tertimpa. `npm.cmd` dapat diganti dengan
 Buka alamat Local yang dicetak Vite, biasanya `http://localhost:5173/`. Jika port
 terpakai, Vite dapat memilih port lain; origin tersebut juga perlu diizinkan BE.
 
-## Login dan Log Out — pratinjau frontend
+## Login dan Log Out
 
-Halaman awal membuka `/login` dengan form nama pengguna dan kata sandi,
-validasi isian, tampilkan/sembunyikan kata sandi, serta pilihan bahasa. Sesuai
-scope saat ini, **alur ini adalah pratinjau FE dan belum memverifikasi akun**.
-Form yang terisi membuka dashboard; tidak ada kredensial dikirim ke backend.
+Gunakan akun yang terdaftar di backend. Form mengambil token dari
+`GET /api/auth/csrf`, mengirim kredensial ke `POST /api/auth/login`, lalu
+memverifikasi cookie sesi melalui `GET /api/auth/me` sebelum membuka dashboard.
+Frontend membawa cookie pada request data dan menyimpan token CSRF sesi di memori.
+Saat reload, frontend memeriksa kembali cookie sesi melalui `/api/auth/me`.
 
-State pratinjau hanya berisi mode dan nama tampilan di `sessionStorage` agar
-reload pada tab yang sama tetap dapat membuka dashboard. Kata sandi tidak
-disimpan. Menu akun di ujung kanan menyediakan **Log Out / Keluar** untuk
-menghapus state pratinjau dan kembali ke `/login`. Preferensi bahasa dan draf
-layout tetap tersedia. Business Operation nonaktif.
-
-Saat API autentikasi siap, ganti alur `previewSession` dengan sesi yang
-diverifikasi server, validasi izin pada API, dan invalidasi sesi saat logout.
-State/routing pratinjau FE bukan pembatas akses data.
+**Log Out / Keluar** mengakhiri sesi di backend dan membuka `/login`. Frontend
+juga kembali ke halaman login jika API data mengembalikan 401. Akses data mengikuti
+PLTS yang diberikan ke akun. **Add Plant** dan **Edit Plant Metadata** tersedia
+untuk admin.
 
 ## Pilihan bahasa
 
@@ -80,19 +76,25 @@ Nama PLTS, identitas perangkat, satuan, dan data dari backend tidak diubah.
 ## Konfigurasi environment
 
 ```dotenv
-VITE_API_URL=http://127.0.0.1:8000
+API_PROXY_TARGET=http://127.0.0.1:8000
+VITE_API_URL=
 VITE_AG_GRID_LICENSE_KEY=
 ```
 
-- Default alamat API adalah `http://127.0.0.1:8000`.
+- Pada development, browser memanggil `/api` lewat origin Vite. Proxy
+  meneruskannya ke `API_PROXY_TARGET`, dengan default `http://127.0.0.1:8000`.
+  Nilai lama `VITE_API_URL` masih bisa dipakai sebagai target proxy.
 - Ubah `.env`, lalu jalankan ulang Vite jika alamat backend berubah.
 - `.env` dan `.env.*` diabaikan Git; `.env.example` tetap disimpan.
 - Nilai `VITE_*` tersedia di browser. Jangan menyimpan password, token, atau
   kredensial database pada variabel tersebut.
-- `127.0.0.1` merujuk ke komputer yang menjalankan browser. Untuk akses dari
-  perangkat lain, gunakan alamat backend yang bisa dijangkau perangkat tersebut.
-- Backend harus mengizinkan origin frontend melalui CORS. API dipanggil langsung
-  dari browser; project ini tidak mengonfigurasi proxy API Vite.
+- Origin frontend harus terdaftar di `CORS_ORIGINS` backend, termasuk saat memakai
+  proxy. Default backend mengizinkan `http://localhost:5173` dan
+  `http://127.0.0.1:5173`.
+- Untuk build produksi atau `vite preview`, kosongkan `VITE_API_URL` jika
+  `/api` diteruskan melalui origin frontend. `vite preview` memakai konfigurasi
+  proxy yang sama. Jika memakai origin API terpisah, isi `VITE_API_URL` saat
+  build dan sesuaikan CORS dan pengaturan cookie backend dengan domain deployment.
 
 Isi `VITE_AG_GRID_LICENSE_KEY` dengan key Enterprise yang sesuai, lalu restart Vite
 (atau build ulang untuk produksi). Key diperiksa memakai API lisensi AG Grid dan
@@ -115,7 +117,12 @@ PLTS), **Map View** (peta), **KPI View** (ringkasan KPI dan statistik yield), da
 **Dashboard** (peta dengan panel monitoring gelap). Home aktif pada keempat tampilan
 tersebut. Klik pilihan untuk berpindah; menu ditutup dengan klik di luar, Escape,
 atau saat fokus keluar. Empat tombol di sisi kanan menyediakan pintasan yang sama.
-Ikon Home dan logo membuka Dashboard; Plants membuka List View.
+Setelah masuk, Home menampilkan **List View**. Ikon Home dan logo juga membuka
+List View. **Plants** membuka Plant Management dan
+menu untuk **Plant**, **Device**, dan **System Configuration**.
+Menu **More** memuat **Maintenance**, **Value-Added Services**, dan **System**.
+**Real-Time Status** merangkum plant dan alarm portofolio. **Alarm Management**
+menampilkan alarm per PLTS, dan **Personal Settings** mengatur bahasa aplikasi.
 
 ### Dashboard
 
@@ -280,12 +287,20 @@ dan kegagalan penyimpanan ditampilkan agar draf tidak dianggap sudah tersimpan.
 
 ### List View
 
-- Ringkasan portofolio: current power, yield today, installed PV capacity, total
-  yield, status PLTS, dan cakupan alarm berdasarkan data yang tersedia.
-- Cakupan per KPI serta jumlah telemetry terbaru/lama/belum terverifikasi/tanpa waktu.
-- Kolom umur telemetry dan timestamp pengukuran pada panel detail PLTS.
-- Tabel AG Grid dengan pencarian nama/kode PLTS dan wilayah.
-- Filter PV/ESS serta status pada bagian Expand.
+- Ringkasan portofolio meliputi daya saat ini, yield hari ini, pendapatan hari ini,
+  daya nominal inverter, kapasitas ESS, total yield, status PLTS, dan alarm aktif.
+- TanStack Query memuat ketiga sumber secara terpisah setiap lima menit dan
+  menyimpan hasil valid di memori selama sesi. Data terakhir tetap tampil
+  jika refresh gagal. Panel menandai data sebagai stale jika sumber menandainya,
+  refresh gagal, atau pembaruan terakhir sudah lebih dari 10 menit.
+- Pilih segmen atau legenda status untuk memfilter tabel PLTS. Pilih diagram
+  atau legenda alarm untuk membuka tabel alarm aktif, termasuk saran perbaikan
+  jika disediakan backend.
+- Ikon pengaturan di Plant KPIs membuka cakupan dan umur telemetry. Kolom umur
+  telemetry dapat ditampilkan lewat pengaturan tabel.
+- Tabel AG Grid dengan filter nama/kode PLTS, wilayah, jenis perangkat, dan nomor seri.
+  Filter status tersedia di bagian Expand. Tabel awal diurutkan dari tanggal
+  sambungan jaringan terbaru.
 - Filter melalui tombol **⋮ → Column Filter** pada header setiap kolom data: teks untuk nama, status,
   wilayah/alamat dan telemetry; angka untuk kapasitas, SOC, daya, serta energi.
   Tombol filter membuka pilihan kondisi seperti lebih besar/kecil dan rentang.
@@ -312,10 +327,9 @@ dan kegagalan penyimpanan ditampilkan agar draf tidak dianggap sudah tersimpan.
 - Ekspor CSV seluruh hasil filter/pengurutan, termasuk baris di halaman lain.
 - Klik nama PLTS untuk membuka panel detail dan masuk ke statistiknya.
 
-Filter dan pagination saat ini berjalan di frontend setelah seluruh overview
-dimuat. Filter ESS sementara berarti **ESS with SOC data**; keberadaan ESS belum
-disimpulkan dari inventory. Country/Region masih menampilkan Indonesia dan
-pencarian wilayah memakai teks alamat.
+Filter dan pagination berjalan di frontend setelah overview dimuat. Jenis dan
+nomor seri perangkat memakai inventaris di metadata PLTS. Untuk data lama,
+filter ESS juga dapat memakai indikator instalasi atau nilai SOC yang tersedia.
 
 ### Map View
 
@@ -387,6 +401,10 @@ Dokumentasi Swagger: `http://127.0.0.1:8000/docs`.
 
 | Endpoint | Pemakaian frontend |
 | --- | --- |
+| `GET /api/auth/csrf`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout` | Membuat, memverifikasi, dan mengakhiri sesi berbasis cookie |
+| `GET /api/v1/dashboard/overview` | Enam KPI dari objek `data.kpis`, dengan nilai sumber kW, kWh, atau IDR |
+| `GET /api/v1/plants` | Daftar PLTS, tabel Home, dan agregasi status termasuk Unknown |
+| `GET /api/v1/alarms/active` | Daftar alarm aktif, agregasi severity, dan tabel detail |
 | `GET /api/database/overview` | Baris monitoring, peta, dan fallback KPI jika summary gagal |
 | `GET /api/database/plants` | Metadata/alamat yang digabung berdasarkan plant_code |
 | `GET /api/database/yield-statistics?plant_code=...&from=...&to=...&grain=...&time_zone=...` | Statistik energi interval sesuai rentang pilihan |
@@ -395,7 +413,7 @@ Dokumentasi Swagger: `http://127.0.0.1:8000/docs`.
 | `GET /api/database/rankings` | Ranking specific energy harian pada KPI View; ranking total yield Dashboard tetap dari overview karena endpoint ranking hanya menyediakan yield harian/specific energy |
 | `GET /api/reports/inverters` | Inverter Report dan kolom Inverter Yield pada Plant Report |
 | `GET /api/devices/{device_id}/history` | Export Performance Data dengan scope PLTS dan pagination |
-| `POST /api/database/plants` | Add Plant; token izin tulis dimasukkan saat menyimpan form |
+| `POST /api/database/plants` | Add Plant menggunakan cookie sesi admin dan header `X-CSRF-Token` |
 | `PATCH /api/database/plants/{plant_code}` | Edit Plant Metadata dari panel detail; hanya field master yang diizinkan BE |
 | `GET /api/alarms/{plant_code}?state=active|cleared` | Alarm aktif/historis PLTS dan metadata configured/quality/cakupan |
 | `GET /api/devices/{plant_code}` | Inventory Device Management dan pilihan inverter Report Management |
@@ -406,18 +424,24 @@ untuk statistik. Nomor dan metrik kosong dinormalisasi sebelum ditampilkan.
 Satuan pada overview/statistik: daya kW, kapasitas PV kWp, yield/energi ESS kWh,
 dan SOC persen. Format MW/MWh/GWh diterapkan pada kartu yang sesuai.
 
-Overview dan metadata dimuat bersama. Portofolio diperbarui setiap lima menit;
-refresh manual tersedia. Alarm portofolio memakai summary sehingga tidak meminta
-alarm satu per satu ke seluruh PLTS. Jika
-pembaruan portofolio gagal, data terakhir tetap ditampilkan bersama pesan error.
-Label API synced adalah waktu frontend berhasil mengambil data. Umur telemetry
+Proxy Vite meneruskan ketiga rute `/api/v1` langsung ke backend. Untuk
+menjalankan frontend dengan backend lama saat development lokal, set
+`API_PROXY_LEGACY_DASHBOARD=true`. Reverse proxy deployment meneruskan `/api`
+ke backend. FE membaca `total` dan `meta.total_pages` dari endpoint daftar dan
+mengirim `snapshot_id` dari halaman pertama pada setiap halaman berikutnya.
+
+KPI, daftar PLTS, dan alarm aktif dimuat melalui tiga query terpisah. Jika refresh
+gagal, panel terkait menampilkan data terakhir yang valid beserta pesan error.
+Waktu pembaruan mengikuti timestamp dari backend. Jika v1 mengirim waktu sumber
+KPI `null`, Home menunjukkan bahwa waktu pembaruan belum tersedia. Umur telemetry
 dihitung terpisah dari timestamp pengukuran dan diperbarui setiap 30 detik.
 
 PLTS awal statistik mengikuti default pada source PortfolioDashboard jika kode
-tersebut ditemukan, atau memakai PLTS pertama. KPI memakai summary BE; jika gagal,
-ringkasan overview ditampilkan dengan pesan fallback dan alarm tidak diklaim nol. Tiap KPI menunjukkan
-jumlah PLTS valid dibanding PLTS relevan, dengan rincian kosong/lama/belum
-terverifikasi melalui tooltip. PLTS demo dan metrik tidak relevan dikecualikan.
+tersebut ditemukan, atau memakai PLTS pertama. Home memakai angka KPI dari
+BE. Revenue Today menampilkan `—` dan status pendapatan belum dikonfigurasi
+selama BE mengirim `unconfigured`. Ikon di sebelah judul Plant KPIs membuka
+cakupan per indikator, termasuk data lama, data belum terverifikasi, serta metrik
+yang tidak berlaku.
 
 KPI telemetry hanya memasukkan nilai dengan waktu pengukuran terverifikasi dan
 belum kedaluwarsa. Gunakan `data_quality.measured_at`/`measured_at`, flag
@@ -440,14 +464,11 @@ Nilai parsial diberi label; jika tidak ada nilai valid, KPI menampilkan --, buka
   backend; firmware dan superior equipment memakai inventory perangkat.
 - Revenue, kapasitas ESS terpasang, dan indikator lingkungan mengikuti summary;
   backend yang mengembalikan unconfigured/null tetap ditampilkan --.
-- Kartu Installed PV capacity memakai kapasitas panel DC; belum sama dengan kartu
-  Inverter rated power AC pada referensi. Kolom tanggal grid connection dan PR
-  belum tersedia pada tabel aktif.
+- Daya nominal inverter, tanggal sambungan jaringan, dan rasio performa hanya
+  ditampilkan jika backend menyediakan nilainya.
 - Thumbnail dan panel detail memakai image_url, dengan ilustrasi sebagai fallback.
-- Add Plant dan Edit Plant Metadata sudah terhubung ke BE. Backend membutuhkan
-  PLANT_WRITE_TOKEN yang dikonfigurasi administrator; masukkan token pada form,
-  jangan dalam VITE_* atau localStorage. Token hanya disimpan di memori selama form terbuka.
-  Business Operation/SmartDesign belum diimplementasikan; label akun hanya tampilan.
+- Add Plant dan Edit Plant Metadata menggunakan sesi admin serta token CSRF
+  yang diperoleh saat sesi diverifikasi.
 
 Data sumber tidak diganti dengan data simulasi. Hasil audit backend aktual dan
 metadata operasional disimpan lokal, tidak disertakan dalam repository public.

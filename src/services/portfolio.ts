@@ -14,6 +14,10 @@ export interface PortfolioSummary {
   environmental_benefits?: { status: string; coal_saved_kg: number | null; co2_avoided_kg: number | null; equivalent_tree_years: number | null; reason?: string | null };
   revenue?: { status: string; revenue_today_idr: number | null; reason?: string | null };
 }
+export type DashboardOverview = Pick<PortfolioSummary, "kpis" | "coverage" | "environmental_benefits"> & {
+  total_plants?: number;
+  revenue?: Pick<NonNullable<PortfolioSummary["revenue"]>, "status" | "reason">;
+};
 export async function getPortfolioSummary(signal?: AbortSignal) {
   const response = await request<PortfolioSummary>(`/api/portfolio/summary?${new URLSearchParams({date: jakartaDate(), time_zone: "Asia/Jakarta"})}`, signal);
   const data = response.data;
@@ -22,10 +26,10 @@ export async function getPortfolioSummary(signal?: AbortSignal) {
     throw new Error("Kontrak summary portofolio tidak valid.");
   return data;
 }
-export function summaryMetric(summary: PortfolioSummary | null | undefined, metric: string, fallback: MetricSummary, coverageKey = metric): MetricSummary {
+export function summaryMetric(summary: DashboardOverview | null | undefined, metric: string, fallback: MetricSummary, coverageKey = metric): MetricSummary {
   if (!summary) return fallback;
   const coverage = summary.coverage[coverageKey] ?? summary.coverage[metric];
-  return { value: number(summary.kpis[metric]), expected: coverage?.expected ?? summary.total_plants,
+  return { value: number(summary.kpis[metric]), expected: coverage?.expected ?? summary.total_plants ?? fallback.expected,
     valid: coverage?.valid ?? 0, missing: coverage?.missing ?? 0, stale: coverage?.stale ?? 0, unverified: coverage?.unverified ?? 0,
     notApplicable: coverage?.not_applicable ?? 0, demo: 0, partial: coverage ? coverage.partial : true };
 }

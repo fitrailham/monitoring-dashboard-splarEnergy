@@ -11,10 +11,12 @@ export default function PlantMap({
   plants,
   onSelect,
   overview = false,
+  embedded = false,
 }: {
   plants: Plant[];
   onSelect: (plant: Plant) => void;
   overview?: boolean;
+  embedded?: boolean;
 }) {
   useLanguage();
   const element = useRef<HTMLDivElement>(null),
@@ -25,7 +27,7 @@ export default function PlantMap({
   const matches = useMemo(
     () =>
       plants.filter((p) =>
-        `${p.plant_name} ${p.address ?? ""}`
+        `${p.plant_name} ${p.plant_code} ${p.region ?? ""} ${p.city ?? ""} ${p.address ?? ""}`
           .toLowerCase()
           .includes(query.toLowerCase()),
       ),
@@ -49,6 +51,7 @@ export default function PlantMap({
     if (!element.current) return;
     const map = L.map(element.current, {
       zoomControl: false,
+      zoomAnimation: !embedded,
       minZoom: 2,
       maxZoom: 18,
     }).setView(overview ? [-2.4, 118] : [8, 72], overview ? 5 : 3);
@@ -73,7 +76,7 @@ export default function PlantMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [overview]);
+  }, [overview, embedded]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -107,8 +110,8 @@ export default function PlantMap({
           ),
         ),
         overview && map.getSize().x > 1100
-          ? { paddingTopLeft: [340, 100], paddingBottomRight: [340, 100], maxZoom: 8 }
-          : { padding: [80, 80], maxZoom: overview ? 8 : 12 },
+          ? { paddingTopLeft: [340, 100], paddingBottomRight: [340, 100], maxZoom: 8, animate: false }
+          : { padding: [80, 80], maxZoom: overview ? 8 : 12, animate: false },
       );
     return () => {
       map.removeLayer(layer);
@@ -139,7 +142,7 @@ export default function PlantMap({
           <Icon name="search" />
         </button>
       </form>
-      <aside className="map-plants">
+      {!embedded && <aside className="map-plants">
         <div className="map-panel-heading">
           <div>
             <span className="eyebrow">{t("PLANT LOCATIONS")}</span>
@@ -175,7 +178,7 @@ export default function PlantMap({
           <span>{located.length}{t(" mapped")}</span>
           <span>{matches.length - located.length}{t(" without coordinates")}</span>
         </div>
-      </aside>
+      </aside>}
       {tilesFailed && (
         <div className="map-tile-warning" role="status">{t("Sebagian peta belum termuat. Periksa koneksi internet.")}</div>
       )}

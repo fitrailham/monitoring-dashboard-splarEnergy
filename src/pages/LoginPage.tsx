@@ -25,21 +25,34 @@ function SolarLandscape() {
   </svg>;
 }
 
-export default function LoginPage({ onPreview }: { onPreview: (displayName: string) => void }) {
+export default function LoginPage({ onLogin, notice }: {
+  onLogin: (username: string, password: string) => Promise<void>;
+  notice: string;
+}) {
   const { t } = useLanguage();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const usernameInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const next = { username: username.trim() ? undefined : "Username is required.", password: password.trim() ? undefined : "Password is required." };
+    if (busy) return;
+    setLoginError("");
+    const next = { username: username.trim() ? undefined : "Username is required.", password: password ? undefined : "Password is required." };
     setErrors(next);
     if (next.username || next.password) { (next.username ? usernameInput : passwordInput).current?.focus(); return; }
-    setPassword("");
-    onPreview(username.trim());
+    setBusy(true);
+    try {
+      await onLogin(username, password);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Sign-in failed. Try again.");
+    } finally {
+      setBusy(false);
+    }
   }
   return <main className="login-page">
     <header className="login-topbar">
@@ -62,18 +75,19 @@ export default function LoginPage({ onPreview }: { onPreview: (displayName: stri
         <form noValidate onSubmit={submit} className="login-form">
           <label htmlFor="login-username">{t("Username")}</label>
           <div className={`login-input-wrap ${errors.username ? "invalid" : ""}`}><Icon name="user" size={19} />
-            <input id="login-username" ref={usernameInput} name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={t("Enter your username")} required maxLength={80} value={username}
+            <input id="login-username" ref={usernameInput} name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={t("Enter your username")} required maxLength={128} value={username} disabled={busy}
               aria-invalid={Boolean(errors.username)} aria-describedby={errors.username ? "login-username-error" : undefined} onChange={(event) => { setUsername(event.target.value); setErrors((previous) => ({ ...previous, username: undefined })); }} />
           </div>{errors.username && <p id="login-username-error" className="login-field-error" role="alert">{t(errors.username)}</p>}
           <label htmlFor="login-password">{t("Password")}</label>
           <div className={`login-input-wrap ${errors.password ? "invalid" : ""}`}><Icon name="lock" size={19} />
-            <input id="login-password" ref={passwordInput} name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder={t("Enter your password")} required value={password}
+            <input id="login-password" ref={passwordInput} name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder={t("Enter your password")} required maxLength={1024} value={password} disabled={busy}
               aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? "login-password-error" : undefined} onChange={(event) => { setPassword(event.target.value); setErrors((previous) => ({ ...previous, password: undefined })); }} />
             <button className="login-password-toggle" type="button" aria-label={t(showPassword ? "Hide password" : "Show password")} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}><Icon name={showPassword ? "eye-off" : "eye"} size={19} /></button>
           </div>{errors.password && <p id="login-password-error" className="login-field-error" role="alert">{t(errors.password)}</p>}
-          <button type="submit" className="login-submit">{t("Sign in")}<Icon name="arrow" size={18} /></button>
+          {loginError && <p className="login-field-error" role="alert">{t(loginError)}</p>}
+          {!loginError && notice && <p className="login-session-notice" role="status">{t(notice)}</p>}
+          <button type="submit" className="login-submit" disabled={busy}>{t(busy ? "Signing in…" : "Sign in")}<Icon name="arrow" size={18} /></button>
         </form>
-        <div className="login-preview-note"><Icon name="info" size={17} /><p><strong>{t("Frontend preview")}</strong><span>{t("This preview opens the dashboard without verifying your account. Your password is not saved.")}</span></p></div>
         <div className="login-card-footer"><Icon name="panel" size={15} /><span>IconGreen Solar Monitoring</span></div>
       </div>
       <footer className="login-footer">{t("Clean energy. Connected insight.")}</footer>

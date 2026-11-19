@@ -1,6 +1,6 @@
-import { getLanguage, translate as t } from "../i18n/language";
+import { translate as t } from "../i18n/language";
 import { useLanguage } from "../i18n/useLanguage";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import {
   CellStyleModule,
@@ -35,6 +35,7 @@ import {
   status,
   statusLabel,
 } from "../services/fleet";
+import { DEVICE_TYPES } from "../services/devices";
 import Icon from "./Icon";
 import CommunityColumnHeader from "./CommunityColumnHeader";
 import { telemetryFreshness, telemetryLabel } from "../services/quality";
@@ -93,7 +94,7 @@ const gridTheme = themeQuartz.withParams({
   rowBorder: { color: "#e5e7eb", width: 1 },
   columnBorder: false,
   rowHoverColor: "#f8fbff",
-  cellHorizontalPadding: 13,
+  cellHorizontalPadding: 10,
   wrapperBorderRadius: 8,
   browserColorScheme: "light",
 });
@@ -101,12 +102,12 @@ interface Filters {
   name: string;
   region: string;
   type: string;
-  state: string;
+  serial: string;
 }
-const emptyFilters: Filters = { name: "", region: "", type: "", state: "" };
-function compareNumbers(
-  a: number | null,
-  b: number | null,
+const emptyFilters: Filters = { name: "", region: "", type: "", serial: "" };
+function compareValues<T extends string | number>(
+  a: T | null,
+  b: T | null,
   _a: unknown,
   _b: unknown,
   descending: boolean,
@@ -114,59 +115,72 @@ function compareNumbers(
   if (a === null || a === undefined)
     return b === null || b === undefined ? 0 : descending ? -1 : 1;
   if (b === null || b === undefined) return descending ? 1 : -1;
-  return a - b;
+  return a < b ? -1 : a > b ? 1 : 0;
 }
+function matchesDeviceType(plant: Plant, type: string) {
+  if (!type) return true;
+  if (type === "pv") return plant.has_pv ?? (number(plant.capacity_kwp) !== null);
+  if (type === "ess")
+    return plant.has_ess ?? (plant.device_types?.includes("ess") || number(plant.battery_soc_percent) !== null);
+  return plant.device_types?.includes(type) ?? false;
+}
+function PlantDataUnavailable() {
+  return <div className="grid-empty"><strong>{t("Plant data is unavailable.")}</strong></div>;
+}
+
 export default function PlantTable({
   plants,
   loading,
+  unavailable,
   onSelect,
   onRefresh,
   now,
   onAdd,
+  statusFilter,
+  onStatusFilterChange,
 }: {
   plants: Plant[];
   loading: boolean;
+  unavailable: boolean;
   onSelect: (plant: Plant) => void;
   onRefresh: () => void;
   now: number;
   onAdd?: () => void;
+  statusFilter: PlantStatus | "";
+  onStatusFilterChange: (status: PlantStatus | "") => void;
 }) {
-  useLanguage();
+  const { language } = useLanguage();
   const grid = useRef<AgGridReact<Plant>>(null);
+  useEffect(() => { grid.current?.api?.paginationGoToFirstPage(); }, [statusFilter]);
   const [draft, setDraft] = useState(emptyFilters),
     [filters, setFilters] = useState(emptyFilters);
   const [expanded, setExpanded] = useState(false),
     [size, setSize] = useState(10),
     [goTo, setGoTo] = useState("");
   const [columns, setColumns] = useState(false),
-    [showAddress, setShowAddress] = useState(false);
+    [optionalColumns, setOptionalColumns] = useState({ address: false, telemetry: false });
   const [columnFiltersActive, setColumnFiltersActive] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const activePage = pagination.page,
     pages = pagination.pages;
-  const filtered = useMemo(
-    () =>
-      plants.filter(
-        (p) =>
-          (p.plant_name + " " + p.plant_code)
-            .toLowerCase()
-            .includes(filters.name.toLowerCase().trim()) &&
-          ([p.address, p.country_name, p.country_code, p.region, p.city].filter(Boolean).join(" "))
-            .toLowerCase()
-            .includes(filters.region.toLowerCase().trim()) &&
-          (!filters.state || status(p) === filters.state) &&
-          (!filters.type ||
-            (filters.type === "pv"
-              ? p.has_pv ?? (number(p.capacity_kwp) !== null)
-              : p.has_ess ?? (number(p.battery_soc_percent) !== null))),
-      ),
-    [plants, filters, getLanguage()],
-  );
+  const filtered = useMemo(() => {
+    const name = filters.name.trim().toLowerCase();
+    const region = filters.region.trim().toLowerCase();
+    const serial = filters.serial.trim().toLowerCase();
+    const collator = new Intl.Collator(language, { numeric: true, sensitivity: "base" });
+    return plants.filter((p) =>
+      `${p.plant_name} ${p.plant_code}`.toLowerCase().includes(name) &&
+      [p.address, p.country_name, p.country_code, p.region, p.city].filter(Boolean).join(" ").toLowerCase().includes(region) &&
+      (!statusFilter || status(p) === statusFilter) &&
+      matchesDeviceType(p, filters.type) &&
+      (!serial || p.device_serial_numbers?.some((item) => item.toLowerCase().includes(serial))),
+    ).sort((a, b) => collator.compare(a.plant_name, b.plant_name));
+  }, [plants, filters, language, statusFilter]);
   const defaultColDef = useMemo<ColDef<Plant>>(
     () => ({
       sortable: true,
       resizable: true,
-      minWidth: 95,
+      minWidth: 88,
       filter: "agTextColumnFilter",
       floatingFilter: false,
       filterParams: { buttons: ["reset"], debounceMs: 200 },
@@ -174,34 +188,33 @@ export default function PlantTable({
       suppressHeaderFilterButton: true,
       ...(!enterpriseEnabled ? { headerComponentParams: { innerHeaderComponent: CommunityColumnHeader } } : {}),
       wrapHeaderText: true,
-      autoHeaderHeight: true,
+      unSortIcon: true,
     }),
-    [getLanguage()],
+    [],
   );
   const columnDefs = useMemo<ColDef<Plant>[]>(() => {
+    const label = (name: string) => t(name, language);
     const numeric = (
       key: keyof Plant,
       headerName: string,
-      width = 140,
+      width = 116,
       digits = 2,
     ): ColDef<Plant> => ({
       colId: String(key),
-      headerName: t(headerName),
+      headerName: label(headerName),
       width,
       cellDataType: "number",
       filter: "agNumberColumnFilter",
       valueGetter: (p) =>
         p.data ? number(p.data[key] as number | string | null) : null,
       valueFormatter: (p) => format(p.value, digits),
-      comparator: compareNumbers,
+      comparator: compareValues,
     });
-    return [
-      { field: "plant_code", headerName: t("Plant Code"), initialHide: true },
+    const definitions: ColDef<Plant>[] = [
       {
         colId: "status",
-        headerName: t("Status"),
-        width: 125,
-        minWidth: 110,
+        headerName: label("Status"),
+        width: 95,
         valueGetter: (p) => (p.data ? statusLabel[status(p.data)] : ""),
         cellRenderer: ({ data }: ICellRendererParams<Plant>) =>
           data ? (
@@ -215,8 +228,8 @@ export default function PlantTable({
       },
       {
         colId: "image",
-        headerName: t("Plant Image"),
-        width: 115,
+        headerName: label("Plant Image"),
+        width: 98,
         sortable: false,
         filter: false,
         floatingFilter: false,
@@ -233,10 +246,9 @@ export default function PlantTable({
       },
       {
         field: "plant_name",
-        headerName: t("Plant Name"),
-        minWidth: 215,
+        headerName: label("Plant Name"),
+        minWidth: 151,
         flex: 1,
-        initialSort: "asc",
         cellRenderer: ({ data }: ICellRendererParams<Plant>) =>
           data ? (
             <button
@@ -250,38 +262,24 @@ export default function PlantTable({
       },
       {
         colId: "country",
-        headerName: t("Country/Region"),
-        width: 175,
-        minWidth: 165,
+        headerName: label("Country/Region"),
+        width: 121,
         valueGetter: ({ data }) => data?.country_name ?? data?.country_code ?? "--",
       },
       {
-        field: "address",
-        headerName: t("Address"),
-        width: 300,
-        initialHide: true,
-        tooltip: ({ data }) => data?.address ?? "",
+        field: "grid_connected_on",
+        headerName: label("Grid Connection Date"),
+        width: 121,
+        initialSort: "desc",
+        valueGetter: ({ data }) => data?.grid_connected_on || null,
+        valueFormatter: ({ value }) => value ?? "--",
+        comparator: compareValues,
       },
-      {
-        colId: "telemetry",
-        headerName: t("Umur Telemetry"),
-        width: 220,
-        valueGetter: ({ data }) => data ? telemetryLabel(telemetryFreshness(data, now)) : "--",
-        cellRenderer: ({ data }: ICellRendererParams<Plant>) => {
-          if (!data) return null;
-          const freshness = telemetryFreshness(data, now);
-          return <span className={`telemetry-badge ${freshness.state}`}
-            title={t(freshness.measuredAt || "Waktu pengukuran perangkat belum terverifikasi")}>
-            {t(telemetryLabel(freshness))}
-          </span>;
-        },
-      },
-      numeric("capacity_kwp", "Installed PV (kWp)", 145, 3),
+      numeric("capacity_kwp", "Installed PV (kWp)", 121, 3),
       {
         colId: "optimizers",
-        headerName: t("Optimizer Quantity"),
-        width: 150,
-        minWidth: 140,
+        headerName: label("Optimizer Quantity"),
+        width: 121,
         sortable: false,
         cellDataType: "number",
         filter: "agNumberColumnFilter",
@@ -290,28 +288,53 @@ export default function PlantTable({
         tooltip: ({ data }) => data?.optimizer_quantity_complete === false ? "Jumlah optimizer masih parsial" : "Jumlah optimizer dari inventory",
       },
       {
-        ...numeric("battery_soc_percent", "Battery SOC (%)", 125, 1),
+        ...numeric("battery_soc_percent", "Battery SOC (%)", 112, 1),
         valueFormatter: (p) =>
           p.value === null || p.value === undefined
             ? "--"
             : format(p.value, 1) + "%",
       },
-      numeric("pv_power_kw", "Current Power (kW)", 145),
+      numeric("pv_power_kw", "Current Power (kW)"),
       {
         colId: "specific",
-        headerName: t("Specific Energy (kWh/kWp)"),
-        width: 185,
-        minWidth: 165,
+        headerName: label("Specific Energy (kWh/kWp)"),
+        width: 125,
         cellDataType: "number",
         filter: "agNumberColumnFilter",
-        valueGetter: (p) => (p.data ? specific(p.data) : null),
+        valueGetter: ({ data }) => !data ? null : data.specific_energy_kwh_per_kwp === undefined
+          ? specific(data) : number(data.specific_energy_kwh_per_kwp),
         valueFormatter: (p) => format(p.value),
-        comparator: compareNumbers,
+        comparator: compareValues,
       },
-      numeric("yield_today_kwh", "Yield Today (kWh)", 145),
-      numeric("total_yield_kwh", "Total Yield (kWh)", 155),
+      numeric("yield_today_kwh", "Yield Today (kWh)"),
+      numeric("total_yield_kwh", "Total Yield (kWh)", 122),
+      numeric("performance_ratio_percent", "Performance Ratio (%)", 138),
+      { field: "plant_code", headerName: label("Plant Code"), initialHide: true },
+      {
+        field: "address",
+        headerName: label("Address"),
+        width: 300,
+        initialHide: true,
+        tooltip: ({ data }) => data?.address ?? "",
+      },
+      {
+        colId: "telemetry",
+        headerName: label("Telemetry age"),
+        width: 220,
+        initialHide: true,
+        valueGetter: ({ data }) => data ? telemetryLabel(telemetryFreshness(data, now)) : "--",
+        cellRenderer: ({ data }: ICellRendererParams<Plant>) => {
+          if (!data) return null;
+          const freshness = telemetryFreshness(data, now);
+          return <span className={`telemetry-badge ${freshness.state}`}
+            title={freshness.measuredAt || label("Measurement time is unverified")}>
+            {label(telemetryLabel(freshness))}
+          </span>;
+        },
+      },
     ];
-  }, [onSelect, now, getLanguage()]);
+    return definitions.map((definition) => ({ ...definition, headerTooltip: definition.headerName }));
+  }, [onSelect, now, language]);
   const syncPagination = useCallback(({ api }: { api: GridApi<Plant> }) => {
     if (api.isDestroyed()) return;
     setPagination({
@@ -326,6 +349,7 @@ export default function PlantTable({
   function download() {
     grid.current?.api.exportDataAsCsv();
   }
+  const firstPageInRange = Math.max(1, Math.min(activePage - 2, pages - 4));
   return (
     <section className="plant-table-card">
       <form
@@ -337,6 +361,7 @@ export default function PlantTable({
         }}
       >
         <label>{t("Plant name")}<input
+            id="home-plant-search"
             placeholder={t("Plant name / code")}
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -356,29 +381,41 @@ export default function PlantTable({
             <option value="">{t("All")}</option>
             <option value="pv">{t("PV")}</option>
             <option value="ess">{t("ESS installed")}</option>
+            {Object.entries(DEVICE_TYPES).filter(([value]) => value !== "ess").map(([value, label]) =>
+              <option key={value} value={value}>{t(label)}</option>
+            )}
           </select>
         </label>
-        <button
-          type="button"
-          className="text-button expand-button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? t("Collapse") : t("Expand")}
-          <Icon name="chevron" size={13} />
-        </button>
-        <button type="submit" className="primary">{t("Search")}</button>
-        <button
-          type="button"
-          className="outline"
-          onClick={() => {
-            setDraft(emptyFilters);
-            setFilters(emptyFilters);
-            grid.current?.api.setFilterModel(null);
-            setColumnFiltersActive(false);
-            setPage(1);
-          }}
-        >{t("Reset")}</button>
+        <label>{t("Device SN")}<input
+            placeholder={t("Device SN")}
+            value={draft.serial}
+            onChange={(e) => setDraft({ ...draft, serial: e.target.value })}
+          />
+        </label>
+        <div className="plant-search-actions">
+          <button
+            type="button"
+            className="text-button expand-button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? t("Collapse") : t("Expand")}
+            <Icon name="chevron" size={13} />
+          </button>
+          <button type="submit" className="primary">{t("Search")}</button>
+          <button
+            type="button"
+            className="outline"
+            onClick={() => {
+              setDraft(emptyFilters);
+              setFilters(emptyFilters);
+              onStatusFilterChange("");
+              grid.current?.api.setFilterModel(null);
+              setColumnFiltersActive(false);
+              setPage(1);
+            }}
+          >{t("Reset")}</button>
+        </div>
         <div className="filter-actions">
           <div className="grid-column-controls">
             <button
@@ -393,13 +430,15 @@ export default function PlantTable({
             {columns && (
               <div className="column-menu">
                 <label>
-                  <input
-                    type="checkbox"
-                    checked={showAddress}
-                    onChange={(e) => {
-                      grid.current?.api.setColumnsVisible(["address"], e.target.checked);
-                    }}
-                  />{t("Show address")}</label>
+                  <input type="checkbox" checked={optionalColumns.address}
+                    onChange={(e) => grid.current?.api.setColumnsVisible(["address"], e.target.checked)} />
+                  {t("Show address")}
+                </label>
+                <label>
+                  <input type="checkbox" checked={optionalColumns.telemetry}
+                    onChange={(e) => grid.current?.api.setColumnsVisible(["telemetry"], e.target.checked)} />
+                  {t("Show telemetry age")}
+                </label>
               </div>
             )}
           </div>
@@ -428,15 +467,15 @@ export default function PlantTable({
             className="primary"
             disabled={!onAdd}
             onClick={onAdd}
-            title={t("Daftarkan PLTS pada sistem monitoring lokal")}
+            title={t(onAdd ? "Daftarkan PLTS pada sistem monitoring lokal" : "Administrator access is required.")}
           >{t("Add Plant")}</button>
         </div>
         {expanded && (
           <div className="expanded-filters">
             <label>{t("Status")}<select
                 aria-label={t("Status")}
-                value={draft.state}
-                onChange={(e) => setDraft({ ...draft, state: e.target.value })}
+                value={statusFilter}
+                onChange={(e) => onStatusFilterChange(e.target.value as PlantStatus | "")}
               >
                 <option value="">{t("All statuses")}</option>
                 {(
@@ -459,6 +498,11 @@ export default function PlantTable({
         )}
       </form>
 
+      {statusFilter && <div className="plant-status-filter">
+        <span>{t("Plant Status")}</span>
+        <strong>{t(statusLabel[statusFilter])}</strong>
+        <button type="button" onClick={() => onStatusFilterChange("")}>{t("Clear status filter")}</button>
+      </div>}
       <div
         className={`plant-ag-grid${enterpriseEnabled ? "" : " plant-grid-community"}`}
         role="region"
@@ -478,16 +522,20 @@ export default function PlantTable({
           defaultCsvExportParams={csvExportParams}
           defaultExcelExportParams={enterpriseEnabled ? { fileName: "solar-plants.xlsx" } : undefined}
           onColumnVisible={({ api }) => {
-            setShowAddress(api.getColumn("address")?.isVisible() ?? false);
+            setOptionalColumns({
+              address: api.getColumn("address")?.isVisible() ?? false,
+              telemetry: api.getColumn("telemetry")?.isVisible() ?? false,
+            });
           }}
           getRowId={(p) => p.data.plant_code}
-          headerHeight={52}
+          headerHeight={59}
           rowHeight={53}
           pagination
           paginationPageSize={size}
           paginationPageSizeSelector={false}
           suppressPaginationPanel
           loading={loading && plants.length === 0}
+          activeOverlay={unavailable ? PlantDataUnavailable : undefined}
           animateRows={false}
           ensureDomOrder
           onGridReady={syncPagination}
@@ -513,12 +561,12 @@ export default function PlantTable({
         />
       </div>
       <footer className="table-footer">
-        <span>{t("Total: ")}<strong>{pagination.total}</strong>{" "}
-          {filters.name || filters.region || filters.type || filters.state || columnFiltersActive
+        <span>{t("Total: ")}<strong>{unavailable || (loading && !plants.length) ? "—" : pagination.total}</strong>{" "}
+          {!unavailable && (filters.name || filters.region || filters.type || filters.serial || statusFilter || columnFiltersActive)
             ? t(`dari ${plants.length} PLTS`)
             : ""}
         </span>
-        <div className="pagination">
+        <nav className="pagination" aria-label={t("Plant table pagination")}>
           <button
             className="page-arrow"
             aria-label={t("Halaman sebelumnya")}
@@ -533,7 +581,7 @@ export default function PlantTable({
                 pages <= 7 ||
                 p === 1 ||
                 p === pages ||
-                Math.abs(p - activePage) <= 1,
+                (p >= firstPageInRange && p < firstPageInRange + 5),
             )
             .map((p, i, arr) => (
               <span key={p}>
@@ -597,7 +645,7 @@ export default function PlantTable({
             </label>
             <button type="submit">{t("Page")}</button>
           </form>
-        </div>
+        </nav>
       </footer>
     </section>
   );

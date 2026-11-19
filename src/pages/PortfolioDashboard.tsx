@@ -8,10 +8,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Plant } from "../services/fleet";
+import type { Plant, PlantStatus } from "../services/fleet";
+import type { AlarmSeverity } from "../services/alarms";
+import type { Session } from "../services/auth";
 import {
   format,
-  getFleet,
   specific,
   status,
   statusLabel,
@@ -20,22 +21,30 @@ import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import FleetSummary from "../components/FleetSummary";
 import type { AlarmSummary } from "../components/FleetSummary";
+import DashboardAlarmsDialog from "../components/DashboardAlarmsDialog";
 import PlantTable from "../components/PlantTable";
 import PlantAdminDialog from "../components/PlantAdminDialog";
 import LanguageSelector from "../components/LanguageSelector";
 import AccountMenu from "../components/AccountMenu";
 import FleetStatistics from "../components/FleetStatistics";
-import { getPortfolioSummary, summaryAlarms } from "../services/portfolio";
-import type { PortfolioSummary } from "../services/portfolio";
+import MoreNavigation from "../components/MoreNavigation";
+import type { MoreSection } from "../components/moreSections";
+import { ALARM_LEVELS, countAlarmSeverities } from "../services/dashboard";
+import { useDashboardData } from "../services/useDashboardData";
 import { telemetryFreshness, telemetryLabel } from "../services/quality";
 import { REPORT_TABS } from "../services/reportWorkspace";
 import type { ReportType } from "../services/reportWorkspace";
+import { PLANT_WORKSPACE_GROUPS } from "../components/plantWorkspaceSections";
+import type { PlantWorkspaceSection } from "../components/plantWorkspaceSections";
+import "../components/PlantWorkspace.css";
 const PlantMap = lazy(() => import("../components/PlantMap"));
 const HomeOverview = lazy(() => import("../components/HomeOverview"));
 const PlantMonitoring = lazy(() => import("../components/PlantMonitoring"));
 const ReportsPage = lazy(() => import("../components/ReportsPage"));
+const PlantWorkspace = lazy(() => import("../components/PlantWorkspace"));
+const MoreWorkspace = lazy(() => import("../components/MoreWorkspace"));
 
-type View = "overview" | "list" | "map" | "statistics" | "monitoring" | "reports";
+type View = "overview" | "list" | "map" | "statistics" | "monitoring" | "reports" | "plants" | "more";
 const views: { id: View; icon: IconName; label: string }[] = [
   { id: "list", icon: "list", label: "List View" },
   { id: "map", icon: "globe", label: "Map View" },
@@ -48,6 +57,7 @@ const emptyAlarms: AlarmSummary = {
   coverage: 0,
   totalPlants: 0,
 };
+const emptyPlants: Plant[] = [];
 
 function PlantDrawer({
   plant,
@@ -60,7 +70,7 @@ function PlantDrawer({
   onClose: () => void;
   onStatistics: () => void;
   now: number;
-  onEdit: () => void;
+  onEdit?: () => void;
 }) {
   useLanguage();
   const freshness = telemetryFreshness(plant, now);
@@ -181,7 +191,8 @@ function PlantDrawer({
               t(" Waktu pengukuran belum terverifikasi; timestamp berasal dari collector.")}
           </p>
         </div>
-        <button className="outline detail-stats-button" onClick={onEdit}>{t("Edit Plant Metadata")}</button>
+        <button className="outline detail-stats-button" disabled={!onEdit} onClick={onEdit}
+          title={onEdit ? undefined : t("Administrator access is required.")}>{t("Edit Plant Metadata")}</button>
         <button className="primary detail-stats-button" onClick={onStatistics}>{t("View yield statistics")}<Icon name="arrow" size={17} />
         </button>
       </aside>
@@ -189,29 +200,47 @@ function PlantDrawer({
   );
 }
 
-export default function PortfolioDashboard({ displayName, onLogout }: { displayName: string; onLogout: () => void }) {
+export default function PortfolioDashboard({ session, onLogout }: { session: Session; onLogout: () => Promise<void> }) {
   useLanguage();
+  const { displayName, role, csrfToken } = session;
+  const canManagePlants = role === "admin";
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
-  const [plants, setPlants] = useState<Plant[]>([]),
-    [view, setView] = useState<View>("overview");
-  const [loading, setLoading] = useState(true),
-    [error, setError] = useState(""),
-    [warning, setWarning] = useState(""),
-    [updated, setUpdated] = useState<Date | null>(null);
-  const [selected, setSelected] = useState(""),
+  const feeds = useDashboardData(now);
+  const plants = feeds.plants.data ?? emptyPlants;
+  const summary = feeds.overview.data ?? null;
+  const alarmsData = feeds.alarms.data;
+  const severityCounts = alarmsData && countAlarmSeverities(alarmsData.alarms);
+  const alarms: AlarmSummary = alarmsData && severityCounts ? {
+    available: true, counts: ALARM_LEVELS.map((level) => severityCounts[level]),
+    coverage: alarmsData.coverage ?? 0, totalPlants: alarmsData.totalPlants ?? plants.length,
+    complete: alarmsData.complete,
+  } : emptyAlarms;
+  const loading = feeds.plants.pending;
+  const refreshKey = feeds.plants.receivedAt;
+  const updated = feeds.plants.updatedAt ?? (refreshKey || null);
+  const error = feeds.plants.error;
+  const [view, setView] = useState<View>("list");
+  const [statusFilter, setStatusFilter] = useState<PlantStatus | "">("");
+  const [alarmSeverity, setAlarmSeverity] = useState<AlarmSeverity | "">();
+  const [selectedCode, setSelected] = useState(""),
     [detail, setDetail] = useState<Plant | null>(null),
-    [menu, setMenu] = useState<"home" | "reports" | "help" | "more" | null>(null),
-    [alarms, setAlarms] = useState<AlarmSummary>(emptyAlarms);
+    [menu, setMenu] = useState<"home" | "reports" | "plants" | "help" | "more" | null>(null);
+  const selected = plants.some((plant) => plant.plant_code === selectedCode) ? selectedCode :
+    (plants.find((plant) => plant.plant_code === "NE=75907332") ?? plants[0])?.plant_code ?? "";
   const [reportType, setReportType] = useState<ReportType>("plant");
+  const [plantSection, setPlantSection] = useState<PlantWorkspaceSection>("plant-management");
+  const [moreSection, setMoreSection] = useState<MoreSection>("status");
   const homeNavigation = useRef<HTMLDivElement>(null);
   const reportsNavigation = useRef<HTMLDivElement>(null);
+  const plantsNavigation = useRef<HTMLDivElement>(null);
+  const closeMoreMenu = useCallback(() => setMenu((current) => current === "more" ? null : current), []);
   useEffect(() => {
-    if (menu !== "home" && menu !== "reports") return;
-    const navigation = menu === "home" ? homeNavigation : reportsNavigation;
+    if (menu !== "home" && menu !== "reports" && menu !== "plants") return;
+    const navigation = menu === "home" ? homeNavigation : menu === "reports" ? reportsNavigation : plantsNavigation;
     function closeOutside(event: PointerEvent) {
       if (event.target instanceof Node && !navigation.current?.contains(event.target))
         setMenu(null);
@@ -228,49 +257,7 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [menu]);
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [plantEditor, setPlantEditor] = useState<{plant?: Plant} | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const [fleetResult, summaryResult] = await Promise.allSettled([getFleet(signal), getPortfolioSummary(signal)]);
-      if (fleetResult.status === "rejected") throw fleetResult.reason;
-      const result = fleetResult.value;
-      if (signal?.aborted) return;
-      setPlants(result.plants);
-      const snapshot = summaryResult.status === "fulfilled" ? summaryResult.value : null;
-      setSummary(snapshot);
-      setAlarms(snapshot ? summaryAlarms(snapshot) : emptyAlarms);
-      setWarning([result.warning, summaryResult.status === "rejected" ? "Summary portofolio belum dapat dimuat; ringkasan memakai overview dan alarm belum tersedia." : ""].filter(Boolean).join(" "));
-      setError("");
-      setUpdated(new Date());
-      setNow(Date.now());
-      setSelected((previous) =>
-        result.plants.some((p) => p.plant_code === previous)
-          ? previous
-          : (result.plants.find((p) => p.plant_code === "NE=75907332")
-              ?.plant_code ??
-            result.plants[0]?.plant_code ??
-            ""),
-      );
-    } catch (e) {
-      if (!signal?.aborted)
-        setError(
-          e instanceof Error ? e.message : "Gagal memuat data monitoring.",
-        );
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    const timer = setInterval(() => void load(controller.signal), 300000);
-    return () => {
-      controller.abort();
-      clearInterval(timer);
-    };
-  }, [load]);
   const selectPlant = useCallback((plant: Plant) => {
     setDetail(plant);
     setSelected(plant.plant_code);
@@ -283,6 +270,34 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
     setReportType(next);
     changeView("reports");
   }
+  function openPlantSection(next: PlantWorkspaceSection) {
+    setPlantSection(next);
+    changeView("plants");
+  }
+  function openMoreSection(next: MoreSection) {
+    setMoreSection(next);
+    changeView("more");
+  }
+  function renderPlantMenuGroup(group: (typeof PLANT_WORKSPACE_GROUPS)[number]) {
+    return (
+      <section className="plants-dropdown-group" key={group.label}>
+        <strong><Icon name={group.icon} size={18} />{t(group.label)}</strong>
+        {group.items.map((item) => (
+          <button key={item.id} type="button" aria-current={plantSection === item.id ? "page" : undefined}
+            onClick={() => {
+              openPlantSection(item.id);
+              plantsNavigation.current?.querySelector("button")?.focus();
+            }}>
+            {t(item.label)}
+          </button>
+        ))}
+      </section>
+    );
+  }
+  const homeView = views.some((item) => item.id === view);
+  const fleetView = view === "list" || view === "statistics";
+  const needsFleet = view !== "more" || moreSection === "status" || moreSection === "alarms";
+  const refresh = () => void feeds.refresh();
   return (
     <div className="portfolio-app">
       <header className="app-header">
@@ -291,7 +306,7 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            changeView("overview");
+            changeView("list");
           }}
           aria-label={t("IconGreen home")}
         >
@@ -308,7 +323,7 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
         <button
           className="header-home"
           aria-label={t("Home")}
-          onClick={() => changeView("overview")}
+          onClick={() => changeView("list")}
         >
           <Icon name="home" size={23} />
         </button>
@@ -322,10 +337,13 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
             }}
           >
             <button
-              className={view !== "monitoring" && view !== "reports" || menu === "home" ? "active" : ""}
+              className={homeView || menu === "home" ? "active" : ""}
               aria-expanded={menu === "home"}
               aria-controls="home-views"
-              onClick={() => setMenu(menu === "home" ? null : "home")}
+              onClick={() => {
+                if (!homeView) setView("list");
+                setMenu(menu === "home" ? null : "home");
+              }}
             >{t("Home")}</button>
             {menu === "home" && (
               <div id="home-views" className="home-dropdown" role="group" aria-label={t("Tampilan Home")}>
@@ -357,11 +375,22 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
             </div>}
           </div>
           <button className="business-operation-disabled" disabled aria-disabled="true" title={t("Fitur operasi bisnis belum tersedia")}>{t("Business Operation")}</button>
-          <button onClick={() => changeView("list")}>{t("Plants")}</button>
-          <button
-            aria-expanded={menu === "more"}
-            onClick={() => setMenu(menu === "more" ? null : "more")}
-          >{t("More")}</button>
+          <div className="home-navigation plants-navigation" ref={plantsNavigation} onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setMenu((current) => current === "plants" ? null : current);
+          }}>
+            <button type="button" className={view === "plants" ? "active" : ""} aria-expanded={menu === "plants"}
+              aria-controls="plants-menu" onClick={() => { setView("plants"); setMenu(menu === "plants" ? null : "plants"); }}>
+              {t("Plants")}
+            </button>
+            {menu === "plants" && (
+              <div id="plants-menu" className="home-dropdown plants-dropdown" role="group" aria-label={t("Plants")}>
+                <div>{PLANT_WORKSPACE_GROUPS.slice(0, 2).map(renderPlantMenuGroup)}</div>
+                <div>{renderPlantMenuGroup(PLANT_WORKSPACE_GROUPS[2])}</div>
+              </div>
+            )}
+          </div>
+          <MoreNavigation open={menu === "more"} section={view === "more" ? moreSection : undefined}
+            onToggle={() => setMenu(menu === "more" ? null : "more")} onClose={closeMoreMenu} onSelect={openMoreSection} />
         </nav>
         <div className="header-utilities">
           <button
@@ -372,12 +401,12 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
           <button
             aria-label={t("Refresh monitoring")}
             title={t("Refresh monitoring")}
-            onClick={() => void load()}
+            onClick={refresh}
           >
             <Icon
               name="refresh"
               size={18}
-              className={loading ? "spinning" : ""}
+              className={feeds.refreshing ? "spinning" : ""}
             />
           </button>
           <button
@@ -398,7 +427,7 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
           </button>
           <AccountMenu displayName={displayName} onLogout={onLogout} />
         </div>
-        {menu && menu !== "home" && menu !== "reports" && (
+        {menu === "help" && (
           <div className="header-dropdown">
             <button
               className="dropdown-close icon-button"
@@ -407,33 +436,14 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
             >
               <Icon name="close" size={15} />
             </button>
-            {menu === "more" ? (
-              <>
-                <strong>{t("Workspace views")}</strong>
-                {views.map((v) => (
-                  <button
-                    className="dropdown-item"
-                    key={v.id}
-                    onClick={() => changeView(v.id)}
-                  >
-                    <Icon name={v.icon} size={17} />
-                    {t(v.label)}
-                    <Icon name="chevron" size={14} />
-                  </button>
-                ))}
-              </>
-            ) : (
-              <>
-                <strong>{t("Monitoring help")}</strong>
-                <p>{t("Buka menu Home untuk memilih List View, Map View, KPI View, atau Dashboard. Data diperbarui otomatis setiap 5 menit.")}</p>
-                <p>{t("Nilai -- dan status Unknown menandakan data yang belum tersedia.")}</p>
-              </>
-            )}
+            <strong>{t("Monitoring help")}</strong>
+            <p>{t("Buka menu Home untuk memilih List View, Map View, KPI View, atau Dashboard. Data diperbarui otomatis setiap 5 menit.")}</p>
+            <p>{t("Nilai -- dan status Unknown menandakan data yang belum tersedia.")}</p>
           </div>
         )}
       </header>
-      <div
-        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""} ${view === "monitoring" || view === "reports" ? "monitoring-hidden" : ""}`}
+      {homeView && <div
+        className={`view-switcher ${view === "map" ? "on-map" : ""} ${view === "overview" ? "on-overview" : ""}`}
         role="group"
         aria-label={t("Dashboard view")}
       >
@@ -449,58 +459,84 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
             <Icon name={v.icon} size={17} />
           </button>
         ))}
-      </div>
-      {view !== "map" && view !== "overview" && view !== "monitoring" && view !== "reports" && (
+      </div>}
+      {fleetView && (
         <FleetSummary
           plants={plants}
           alarms={alarms}
-          summary={summary}
+          feeds={feeds}
+          statusFilter={statusFilter}
           onStats={() => changeView("statistics")}
-          onStatus={() => changeView("list")}
+          onStatus={(status) => {
+            setStatusFilter(status);
+            changeView("list");
+            requestAnimationFrame(() => document.getElementById("home-plant-search")?.focus());
+          }}
+          onAlarms={setAlarmSeverity}
           now={now}
         />
       )}
-      <main className={view === "reports" ? "main-reports" : view === "monitoring" ? "main-monitoring" : view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
-        {(t(error) || t(warning)) && (
+      <main className={view === "more" ? "main-more" : view === "plants" ? "plant-workspace-main" : view === "reports" ? "main-reports" : view === "monitoring" ? "main-monitoring" : view === "overview" ? "main-overview" : view === "map" ? "main-map" : "main-content"}>
+        {!fleetView && needsFleet && error && (
           <div
             className={`connection-banner ${error ? "error-banner" : ""}`}
             role="alert"
           >
             <Icon name="info" size={18} />
             <span>
-              {t(error) || t(warning)}
+              {t(error)}
               {error && plants.length > 0
                 ? t(" Menampilkan data terakhir yang berhasil dimuat.")
                 : ""}
             </span>
-            <button className="text-button" onClick={() => void load()}>{t("Coba lagi")}</button>
+            <button className="text-button" onClick={refresh}>{t("Coba lagi")}</button>
           </div>
+        )}
+        {view === "more" && (
+          <Suspense fallback={<div className="map-loading">{t("Loading…")}</div>}>
+            <MoreWorkspace section={moreSection} onSectionChange={setMoreSection} plants={plants} loading={loading}
+              selected={selected} onPlantChange={setSelected} onPlantSelect={selectPlant}
+              onOpenPlantSection={openPlantSection} now={now} refreshKey={refreshKey}
+              alarms={alarms} summary={summary} displayName={displayName} />
+          </Suspense>
+        )}
+        {view === "plants" && (
+          <Suspense fallback={<div className="map-loading">{t("Loading plants…")}</div>}>
+            <PlantWorkspace section={plantSection} onSectionChange={setPlantSection} plants={plants}
+              loading={loading} selected={selected} onPlantChange={setSelected} onPlantSelect={selectPlant}
+              onPlantAdd={canManagePlants ? () => setPlantEditor({}) : undefined}
+              onPlantEdit={canManagePlants ? (plant) => setPlantEditor({ plant }) : undefined}
+              onMonitoring={() => changeView("monitoring")} refreshKey={refreshKey} />
+          </Suspense>
         )}
         {view === "reports" && (
           <Suspense fallback={<div className="map-loading">{t("Memuat Reports…")}</div>}>
             <ReportsPage plants={plants} report={reportType} onReportChange={setReportType}
-              now={now} refreshKey={updated?.getTime() ?? 0} plantsLoading={loading} />
+              now={now} refreshKey={refreshKey} plantsLoading={loading} />
           </Suspense>
         )}
         {view === "monitoring" && (
           <Suspense fallback={<div className="map-loading">{t("Memuat Monitoring…")}</div>}>
             <PlantMonitoring plants={plants} selected={selected} onChange={setSelected}
-              now={now} refreshKey={updated?.getTime() ?? 0} />
+              now={now} refreshKey={refreshKey} />
           </Suspense>
         )}
         {view === "overview" && (
           <Suspense fallback={<div className="map-loading">{t("Memuat Dashboard…")}</div>}>
             <HomeOverview plants={plants} alarms={alarms} summary={summary} now={now} selected={selected}
-              onChange={setSelected} onSelect={selectPlant} refreshKey={updated?.getTime() ?? 0} />
+              onChange={setSelected} onSelect={selectPlant} refreshKey={refreshKey} />
           </Suspense>
         )}
         {view === "list" && (
           <PlantTable
-            onAdd={() => setPlantEditor({})}
+            onAdd={canManagePlants ? () => setPlantEditor({}) : undefined}
             plants={plants}
             loading={loading}
+            unavailable={feeds.plants.data === undefined && Boolean(error)}
             onSelect={selectPlant}
-            onRefresh={() => void load()}
+            onRefresh={refresh}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
             now={now}
           />
         )}
@@ -510,7 +546,7 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
             plants={plants}
             selected={selected}
             onChange={setSelected}
-            refreshKey={updated?.getTime() ?? 0}
+            refreshKey={refreshKey}
           />
         )}
         {view === "map" && (
@@ -525,28 +561,30 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
             <PlantMap plants={plants} onSelect={selectPlant} />
           </Suspense>
         )}
-        {view !== "map" && view !== "overview" && view !== "monitoring" && view !== "reports" && (
+        {fleetView && (
           <footer className="app-footer">
             <span>
               <i
-                className={`connection-dot ${error ? "offline" : updated ? "online" : ""}`}
+                className={`connection-dot ${error || feeds.plants.stale ? "offline" : updated !== null ? "online" : ""}`}
               />
-              {updated
-                ? t(`API synced ${updated.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })} WIB`)
-                : t("Connecting to monitoring…")}
+              {updated !== null
+                ? t(`API synced ${new Date(updated).toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })} WIB`)
+                : t(error ? "Data unavailable" : "Connecting to monitoring…")}
               <span className="footer-separator">·</span>{t("Auto-refresh 5 min")}</span>
             <span>{t("IconGreen Solar Monitoring")}<span className="footer-separator">·</span>
               {plants.length}{t(" plants")}</span>
           </footer>
         )}
       </main>
+      {alarmSeverity !== undefined && <DashboardAlarmsDialog initialSeverity={alarmSeverity} feed={feeds.alarms}
+        plants={plants} onRetry={refresh} onClose={() => setAlarmSeverity(undefined)} />}
       {detail && (
         <PlantDrawer
           plant={
             plants.find((p) => p.plant_code === detail.plant_code) ?? detail
           }
           onClose={() => setDetail(null)}
-          onEdit={() => {setDetail(null); setPlantEditor({plant: detail});}}
+          onEdit={canManagePlants ? () => {setDetail(null); setPlantEditor({plant: detail});} : undefined}
           now={now}
           onStatistics={() => {
             setDetail(null);
@@ -554,8 +592,8 @@ export default function PortfolioDashboard({ displayName, onLogout }: { displayN
           }}
         />
       )}
-      {plantEditor && <PlantAdminDialog plant={plantEditor.plant} onClose={() => setPlantEditor(null)} onSaved={(code) => {
-        setPlantEditor(null); setSelected(code); void load();
+      {canManagePlants && plantEditor && <PlantAdminDialog plant={plantEditor.plant} csrfToken={csrfToken} onClose={() => setPlantEditor(null)} onSaved={(code) => {
+        setPlantEditor(null); setSelected(code); refresh();
       }} />}
     </div>
   );

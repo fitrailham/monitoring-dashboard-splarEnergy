@@ -1,16 +1,20 @@
-import { getLanguage, translate as t } from "../i18n/language";
-import { useLanguage } from "../i18n/useLanguage";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { AgPolarChartOptions } from "ag-charts-community";
+import { getLocale, translate as t } from "../i18n/language";
+import { useLanguage } from "../i18n/useLanguage";
+import { ALARM_SEVERITIES } from "../services/alarms";
+import type { AlarmSeverity } from "../services/alarms";
+import { ALARM_LEVELS, PLANT_STATUSES, countPlantStatuses, formatDashboardMetric } from "../services/dashboard";
+import { number, statusLabel } from "../services/fleet";
+import type { Plant, PlantStatus } from "../services/fleet";
+import type { DashboardOverview } from "../services/portfolio";
+import { telemetryFreshness } from "../services/quality";
+import type { useDashboardData } from "../services/useDashboardData";
 import { DashboardDonutChart } from "./AgDashboardChart";
-import type { Plant } from "../services/fleet";
-import { format, number, status, statusLabel } from "../services/fleet";
-import { aggregateMetric, metricCoverageDetail, metricCoverageLabel, telemetryFreshness } from "../services/quality";
-import type { MetricSummary } from "../services/quality";
-import { summaryMetric } from "../services/portfolio";
-import type { PortfolioSummary } from "../services/portfolio";
+import DashboardFeedStatus from "./DashboardFeedStatus";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
+import "./FleetSummary.css";
 
 export interface AlarmSummary {
   available: boolean;
@@ -19,269 +23,211 @@ export interface AlarmSummary {
   totalPlants: number;
   complete?: boolean;
 }
-function Donut({
-  values,
-  colors,
-  label,
-  total,
-}: {
-  values: number[];
-  colors: string[];
+
+const statusColors = ["#36bd3d", "#ff454d", "#a4adb5", "#4ba9e9"];
+const alarmColors = ["#ff384b", "#ff8700", "#ffc437", "#48b0f6", "#a4adb5"];
+const alarmIcons = ["bell", "bolt", "info", "info", "help"] satisfies IconName[];
+const kpis: { key: string; label: string; icon: IconName; units: string[] }[] = [
+  { key: "current_power_kw", label: "Current power", icon: "bolt", units: ["kW", "MW"] },
+  { key: "yield_today_kwh", label: "Yield today", icon: "sun", units: ["kWh", "MWh"] },
+  { key: "revenue_today_idr", label: "Revenue today", icon: "coins", units: ["Rp"] },
+  { key: "inverter_rated_power_kw", label: "Inverter rated power", icon: "device", units: ["kW", "MW"] },
+  { key: "ess_rated_capacity_kwh", label: "Rated ESS capacity", icon: "battery", units: ["kWh", "MWh"] },
+  { key: "total_yield_kwh", label: "Total yield", icon: "globe", units: ["kWh", "MWh", "GWh"] },
+];
+type Slice = { index: number; label: string; value: number | null; color: string };
+
+function Donut({ slices, label, total, pending, partial, onSelect, onOpen }: {
+  slices: Slice[];
   label: string;
   total: number | null;
+  pending: boolean;
+  partial?: boolean;
+  onSelect: (index: number) => void;
+  onOpen?: () => void;
 }) {
-  useLanguage();
-  const count = values.reduce((sum, value) => sum + value, 0);
-  const options = useMemo<
-    AgPolarChartOptions<{ label: string; value: number; color: string }>
-  >(
-    () => ({
-      data: values
-        .map((value, index) => ({
-          label:
-            label === "Total plants"
-              ? ["Normal", "Faulty", "Disconnected", "Unknown"][index]
-              : ["Critical", "Major", "Minor", "Warning", "Unclassified"][
-                  index
-                ],
-          value,
-          color: colors[index],
-        }))
-        .filter((d) => d.value > 0),
-      background: { fill: "transparent" },
-      padding: { top: 0, right: 0, bottom: 0, left: 0 },
-      animation: { enabled: false },
-      legend: { enabled: false },
-      overlays: { noData: { enabled: false } },
-      series: [
-        {
-          type: "donut",
-          angleKey: "value",
-          calloutLabelKey: "label",
-          innerRadiusRatio: 0.76,
-          outerRadiusRatio: 0.9,
-          strokeWidth: 0,
-          sectorSpacing: count > 0 ? 0.5 : 0,
-          calloutLabel: { enabled: false },
-          sectorLabel: { enabled: false },
-          itemStyler: ({ datum }) => ({
-            fill: datum.color,
-            stroke: datum.color,
-          }),
-          tooltip: {
-            renderer: ({ datum }) => ({
-              title: t(datum.label),
-              data: [{ label: t("Count"), value: String(datum.value) }],
-            }),
-          },
-        },
-      ],
-    }),
-    [values, colors, label, count, getLanguage()],
-  );
+  const hasValues = slices.some(({ value }) => value !== null && value > 0);
+  const options = useMemo<AgPolarChartOptions<Slice>>(() => ({
+    data: slices.filter(({ value }) => value !== null && value > 0),
+    background: { fill: "transparent" },
+    padding: { top: 0, right: 0, bottom: 0, left: 0 },
+    animation: { enabled: false },
+    legend: { enabled: false },
+    overlays: { noData: { enabled: false } },
+    series: [{
+      type: "donut",
+      angleKey: "value",
+      calloutLabelKey: "label",
+      innerRadiusRatio: 0.76,
+      outerRadiusRatio: 0.9,
+      sectorSpacing: 0.5,
+      calloutLabel: { enabled: false },
+      sectorLabel: { enabled: false },
+      cursor: "pointer",
+      itemStyler: ({ datum }) => ({ fill: datum.color, stroke: datum.color }),
+      listeners: { seriesNodeClick: ({ datum }) => onSelect(datum.index) },
+    }],
+  }), [slices, onSelect]);
+  const count = total === null ? "—" : `${partial ? "≥" : ""}${new Intl.NumberFormat(getLocale()).format(total)}`;
+  const center = <><strong>{count}</strong><span>{t(label)}</span></>;
+
   return (
-    <div
-      className="donut ag-donut"
-      aria-label={t(label + ": " + (total ?? "belum tersedia"))}
-    >
-      {!count && <div className="donut-empty-ring" aria-hidden="true" />}
-      <DashboardDonutChart options={options} />
-      <div className="donut-label">
-        <strong>{total ?? "--"}</strong>
-        <span>{t(label)}</span>
-      </div>
+    <div className="donut ag-donut">
+      {!hasValues && <div className={`donut-empty-ring${pending ? " dashboard-ring-skeleton" : ""}`} aria-hidden="true" />}
+      {hasValues && <DashboardDonutChart options={options} />}
+      {!pending && (onOpen
+        ? <button className="donut-label donut-link" type="button" aria-label={t("View active alarms")} onClick={onOpen}>{center}</button>
+        : <div className="donut-label">{center}</div>)}
     </div>
   );
 }
-function KPI({
-  icon,
-  label,
-  value,
-  unit,
-  coverage,
-}: {
-  icon: IconName;
-  label: string;
-  value: number | null;
-  unit: string;
-  coverage?: MetricSummary;
+
+function KpiGrid({ overview, pending, showCoverage }: {
+  overview?: DashboardOverview;
+  pending: boolean;
+  showCoverage: boolean;
 }) {
-  useLanguage();
+  const locale = getLocale();
+  const counts = new Intl.NumberFormat(locale);
   return (
-    <div className="fleet-kpi">
-      <div className="kpi-symbol">
-        <Icon name={icon} size={25} />
-      </div>
-      <div>
-        <div className="kpi-number">
-          {format(value)} <small>{t(unit)}</small>
-        </div>
-        <span>{t(label)}</span>
-        {coverage && (
-          <small className={`kpi-coverage ${coverage.partial ? "partial" : ""}`} title={t(metricCoverageDetail(coverage))}>
-            {t(metricCoverageLabel(coverage))}
-          </small>
-        )}
-      </div>
+    <div className="kpi-grid" id="fleet-kpi-grid">
+      {kpis.map(({ key, label, icon, units }) => {
+        const revenue = key === "revenue_today_idr";
+        const unconfigured = revenue && overview?.revenue?.status === "unconfigured";
+        const coverage = overview?.coverage[key];
+        const raw = kpiValue(overview, key);
+        const { amount, unit } = formatDashboardMetric(raw, units, locale, revenue);
+        return (
+          <div className="fleet-kpi" key={key}>
+            <div className="kpi-symbol"><Icon name={icon} size={25} /></div>
+            <div>
+              {pending ? <div className="dashboard-skeleton" aria-hidden="true" /> :
+                <div className="kpi-number" aria-label={raw === null ? t("Data unavailable") : undefined}>
+                  {amount} <small>{t(unit)}</small>
+                </div>}
+              <span>{t(label)}</span>
+              {unconfigured && <small className="kpi-coverage" title={overview?.revenue?.reason || undefined}>
+                {t("Revenue not configured")}
+              </small>}
+              {showCoverage && coverage && (
+                <small className={`kpi-coverage${coverage.partial ? " partial" : ""}`}>
+                  {t(`Coverage ${counts.format(coverage.valid)}/${counts.format(coverage.expected)} plants${coverage.partial ? " · partial" : ""}`)}
+                  {(coverage.missing > 0 || coverage.stale > 0 || coverage.unverified > 0 || coverage.not_applicable > 0) && (
+                    <span className="kpi-coverage-detail">
+                      {t(`${counts.format(coverage.missing)} missing, ${counts.format(coverage.stale)} stale, ${counts.format(coverage.unverified)} unverified, ${counts.format(coverage.not_applicable)} not applicable`)}
+                    </span>
+                  )}
+                </small>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
+
+function kpiValue(overview: DashboardOverview | undefined, key: string) {
+  return key === "revenue_today_idr" && overview?.revenue?.status === "unconfigured"
+    ? null : number(overview?.kpis[key]);
+}
+
 export default function FleetSummary({
-  plants,
-  alarms,
-  onStats,
-  onStatus,
-  now,
-  summary,
+  plants, alarms, feeds, statusFilter, onStats, onStatus, onAlarms, now,
 }: {
   plants: Plant[];
   alarms: AlarmSummary;
+  feeds: ReturnType<typeof useDashboardData>;
+  statusFilter: PlantStatus | "";
   onStats: () => void;
-  onStatus: () => void;
+  onStatus: (status: PlantStatus | "") => void;
+  onAlarms: (severity: AlarmSeverity | "") => void;
   now: number;
-  summary?: PortfolioSummary | null;
 }) {
   useLanguage();
-  const statuses = ["normal", "faulty", "disconnected", "unknown"] as const;
-  const values = statuses.map(
-    (s) => summary ? summary.plant_status[s] : plants.filter((p) => status(p) === s).length,
-  );
-  const power = summaryMetric(summary, "current_power_kw", aggregateMetric(plants, "pv_power_kw", now), "pv_power_kw"),
-    yieldToday = summaryMetric(summary, "yield_today_kwh", aggregateMetric(plants, "yield_today_kwh", now)),
-    capacity = summaryMetric(summary, "installed_pv_capacity_kwp", aggregateMetric(plants, "capacity_kwp", now), "capacity_kwp"),
-    totalYield = summaryMetric(summary, "total_yield_kwh", aggregateMetric(plants, "total_yield_kwh", now));
-  const freshness = plants.map((plant) => telemetryFreshness(plant, now));
+  const [showCoverage, setShowCoverage] = useState(false);
+  const { overview, plants: plantFeed, alarms: alarmFeed, refresh } = feeds;
+  const plantCounts = countPlantStatuses(plants);
+  const plantSlices = PLANT_STATUSES.map((status, index) => ({
+    index, label: t(statusLabel[status]), color: statusColors[index],
+    value: plantFeed.data === undefined ? null : plantCounts[status],
+  }));
+  const alarmSlices = ALARM_LEVELS.map((severity, index) => ({
+    index, label: t(ALARM_SEVERITIES[severity]), color: alarmColors[index],
+    value: alarmFeed.data === undefined ? null : alarms.counts[index],
+  }));
+  const alarmTotal = alarmFeed.data?.alarms.length ?? null;
+  const freshness = showCoverage ? plants.map((plant) => telemetryFreshness(plant, now)) : [];
+  const retry = () => void refresh();
+  const fmt = new Intl.NumberFormat(getLocale());
+
   return (
     <section className="fleet-summary" aria-label={t("Fleet overview")}>
       <div className="solar-grid" aria-hidden="true" />
-      <article className="summary-kpis">
+      <article className="summary-kpis" aria-busy={overview.pending}>
         <div className="summary-title">
-          <h2>{t("Plant KPIs ")}<Icon name="settings" size={13} />
-          </h2>
-          <button aria-label={t("Lihat statistik yield")} onClick={onStats}>
-            <Icon name="chevron" />
-          </button>
+          <div className="summary-title-label">
+            <h2>{t("Plant KPIs")}</h2>
+            <button type="button" aria-label={t("Show KPI coverage")} aria-expanded={showCoverage}
+              aria-controls="fleet-kpi-grid" onClick={() => setShowCoverage(!showCoverage)}>
+              <Icon name="settings" size={14} />
+            </button>
+          </div>
+          <button type="button" aria-label={t("View yield statistics")} onClick={onStats}><Icon name="chevron" /></button>
         </div>
-        <div className="kpi-grid">
-          <KPI
-            icon="bolt"
-            label="Current power"
-            value={power.value === null ? null : power.value / 1000}
-            unit="MW"
-            coverage={power}
-          />
-          <KPI
-            icon="sun"
-            label="Yield today"
-            value={yieldToday.value === null ? null : yieldToday.value / 1000}
-            unit="MWh"
-            coverage={yieldToday}
-          />
-          <KPI icon="coins" label="Revenue today" value={summary?.revenue?.status === "unconfigured" ? null : number(summary?.kpis.revenue_today_idr)} unit="Rp" />
-          <KPI
-            icon="panel"
-            label="Installed PV capacity"
-            value={capacity.value === null ? null : capacity.value / 1000}
-            unit="MWp"
-            coverage={capacity}
-          />
-          <KPI
-            icon="battery"
-            label="Rated ESS capacity"
-            value={typeof summary?.kpis.ess_rated_capacity_kwh === "number" ? summary.kpis.ess_rated_capacity_kwh / 1000 : null}
-            unit="MWh"
-          />
-          <KPI
-            icon="globe"
-            label="Total yield"
-            value={totalYield.value === null ? null : totalYield.value / 1e6}
-            unit="GWh"
-            coverage={totalYield}
-          />
-        </div>
+        <KpiGrid overview={overview.data} pending={overview.pending} showCoverage={showCoverage} />
+        <DashboardFeedStatus feed={overview} onRetry={retry}
+          empty={overview.data && kpis.every(({ key }) => kpiValue(overview.data, key) === null) ? "KPI data is unavailable." : undefined} />
       </article>
-      <article className="summary-status">
+      <article className="summary-status" aria-busy={plantFeed.pending}>
         <div className="summary-title">
           <h2>{t("Plant Status")}</h2>
-          <button aria-label={t("Lihat daftar dan status PLTS")} onClick={onStatus}>
-            <Icon name="chevron" />
-          </button>
+          <button type="button" aria-label={t("View plant list and status")} onClick={() => onStatus("")}><Icon name="chevron" /></button>
         </div>
         <div className="donut-layout">
-          <Donut
-            values={values}
-            colors={["#36bd3d", "#ff454d", "#a4adb5", "#4ba9e9"]}
-            total={summary?.total_plants ?? plants.length}
-            label="Total plants"
-          />
+          <Donut slices={plantSlices} label="Total plants" total={plantFeed.data === undefined ? null : plants.length}
+            pending={plantFeed.pending} onSelect={(index) => onStatus(PLANT_STATUSES[index])} />
           <div className="donut-legend">
-            {statuses.map((s, i) => (
-              <div key={s}>
-                <i className={`status-dot ${s}`} />
-                <span>
-                  <strong>{values[i]}</strong>
-                  <small>{t(statusLabel[s])}</small>
-                </span>
-              </div>
+            {plantSlices.filter(({ index, value }) => index !== 3 || (value ?? 0) > 0).map(({ index, label, value }) => (
+              <button key={label} type="button" disabled={plantFeed.data === undefined}
+                aria-pressed={statusFilter === PLANT_STATUSES[index]} onClick={() => onStatus(PLANT_STATUSES[index])}>
+                <i className={`status-dot ${PLANT_STATUSES[index]}`} />
+                <span><strong>{plantFeed.pending ? <i className="dashboard-skeleton" /> : value === null ? "—" : fmt.format(value)}</strong><small>{label}</small></span>
+              </button>
             ))}
-            <p>{t("Status mengikuti data backend.")}</p>
           </div>
         </div>
+        <DashboardFeedStatus feed={plantFeed} onRetry={retry} empty={!plants.length ? "No plants yet" : undefined} />
       </article>
-      <article className="summary-alarms">
+      <article className="summary-alarms" aria-busy={alarmFeed.pending}>
         <div className="summary-title">
           <h2>{t("Active Alarms")}</h2>
-          <Icon name="bell" size={17} />
+          <button type="button" aria-label={t("Open active alarm table")} onClick={() => onAlarms("")}><Icon name="chevron" /></button>
         </div>
         <div className="donut-layout">
-          <Donut
-            values={alarms.counts}
-            colors={["#ff384b", "#ff8700", "#ffc437", "#48b0f6", "#a4adb5"]}
-            total={
-              alarms.available ? alarms.counts.reduce((a, b) => a + b, 0) : null
-            }
-            label="Total alarms"
-          />
+          <Donut slices={alarmSlices} label="Total alarms" total={alarmTotal} pending={alarmFeed.pending}
+            partial={alarms.complete === false} onSelect={(index) => onAlarms(ALARM_LEVELS[index])} onOpen={() => onAlarms("")} />
           <div className="donut-legend alarm-legend">
-            {["Critical", "Major", "Minor", "Warning"].map((label, i) => (
-              <div key={label}>
-                <span className={`alarm-symbol severity-${i}`}>
-                  <Icon
-                    name={i === 0 ? "bell" : i === 1 ? "bolt" : "info"}
-                    size={15}
-                  />
-                </span>
-                <span>
-                  <strong>{alarms.available ? alarms.counts[i] : "--"}</strong>
-                  <small>{t(label)}</small>
-                </span>
-              </div>
+            {alarmSlices.filter(({ index, value }) => index < 4 || (value ?? 0) > 0).map(({ index, label, value }) => (
+              <button key={label} type="button" disabled={alarmFeed.data === undefined} onClick={() => onAlarms(ALARM_LEVELS[index])}>
+                <span className={`alarm-symbol severity-${index}`}><Icon name={alarmIcons[index]} size={15} /></span>
+                <span><strong>{alarmFeed.pending ? <i className="dashboard-skeleton" /> : value === null ? "—" : fmt.format(value)}</strong><small>{label}</small></span>
+              </button>
             ))}
-            {alarms.counts[4] > 0 && (
-              <div>
-                <i className="status-dot disconnected" />
-                <span>
-                  <strong>{alarms.counts[4]}</strong>
-                  <small>{t("Unclassified")}</small>
-                </span>
-              </div>
-            )}
-            <p>
-              {alarms.available
-                ? t(`Cakupan ${alarms.coverage}/${alarms.totalPlants} PLTS${alarms.complete === false ? " · parsial" : ""}`)
-                : t("Data alarm belum tersedia")}
-            </p>
+            {alarmFeed.data && !alarms.complete && <p>{t("Alarm coverage is partial.")}</p>}
           </div>
         </div>
+        <DashboardFeedStatus feed={alarmFeed} onRetry={retry} empty={alarmTotal === 0 && alarms.complete ? "No active alarms" : undefined} />
       </article>
-      <div className="fleet-data-quality" aria-label={t("Kualitas waktu pengukuran")}>
-        <span>{t("Telemetry:")}</span>
-        <span>{freshness.filter((item) => item.state === "fresh").length}{t(" terbaru")}</span>
-        <span>{freshness.filter((item) => item.state === "stale").length}{t(" lama")}</span>
-        <span>{freshness.filter((item) => item.state === "unverified").length}{t(" belum terverifikasi")}</span>
-        <span>{freshness.filter((item) => item.state === "missing").length}{t(" tanpa waktu")}</span>
-        <small>{t("KPI telemetry hanya menjumlahkan pengukuran terbaru yang terverifikasi.")}</small>
-      </div>
+      {showCoverage && (
+        <div className="fleet-data-quality" id="fleet-telemetry-coverage" aria-label={t("Measurement time quality")}>
+          <span>{t("Telemetry:")}</span>
+          {(["fresh", "stale", "unverified", "missing"] as const).map((state, index) => (
+            <span key={state}>{freshness.filter((item) => item.state === state).length}
+              {t([" terbaru", " lama", " belum terverifikasi", " tanpa waktu"][index])}</span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

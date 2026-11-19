@@ -19,6 +19,7 @@ export interface MonitoringAlarm {
   acknowledged: boolean | null;
   name: string | null;
   description: string | null;
+  repairSuggestion: string | null;
   occurredAt: string | null;
   clearedAt: string | null;
 }
@@ -41,6 +42,29 @@ interface AlarmEnvelope {
   collectedAt?: string | null;
   coverage?: { complete?: boolean };
   meta?: { is_partial?: boolean; total_pages?: number | null };
+}
+
+export async function getFleetAlarmPage(page: number, pageSize: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ state: "active", page: String(page), page_size: String(pageSize) });
+  const response: AlarmEnvelope = await request<unknown[]>(`/api/alarms?${params}`, signal);
+  if (!Array.isArray(response.data)) throw new Error("Format data alarm tidak valid.");
+
+  const configured = response.configured === true;
+  const alarms = configured ? response.data.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const raw = value as Record<string, unknown>;
+    const plantCode = sourceText(raw, "plant_code");
+    if (!plantCode) return [];
+    return normalizeAlarms([raw], plantCode, plantCode)
+      .filter((alarm) => alarm.state === "active")
+      .map((alarm) => ({ ...alarm, plantCode }));
+  }) : [];
+  const total = configured && typeof response.total === "number" && Number.isInteger(response.total) && response.total >= 0
+    ? response.total : null;
+  const expectedRows = total === null ? null : Math.max(0, Math.min(pageSize, total - (page - 1) * pageSize));
+  const complete = configured && response.quality === "fresh" && response.coverage?.complete === true &&
+    response.meta?.is_partial !== true && alarms.length === response.data.length && alarms.length === expectedRows;
+  return { alarms, configured, complete, total };
 }
 
 function sourceText(raw: Record<string, unknown>, ...keys: string[]) {
@@ -66,7 +90,7 @@ export function normalizeAlarms(rows: unknown[], code: string, plantName: string
     const type = sourceText(raw, "device_type")?.toLowerCase();
     const alarmId = sourceText(raw, "alarm_id"), vendorId = sourceText(raw, "vendor_alarm_id");
     const deviceId = sourceText(raw, "device_id"), sn = sourceText(raw, "device_sn", "sn", "esnCode");
-    const occurredAt = sourceText(raw, "occurred_at", "occurredAt", "occurrence_time");
+    const occurredAt = sourceText(raw, "occurred_at", "raised_at", "raised_time", "occurredAt", "occurrence_time");
     const name = sourceText(raw, "name", "alarm_name");
     const id = JSON.stringify([code, alarmId ?? vendorId ?? name ?? index, deviceId ?? sn, occurredAt, state]);
     return [{ id, alarmId, vendorId, plantName: sourceText(raw, "plant_name") ?? plantName, deviceId,
@@ -75,7 +99,9 @@ export function normalizeAlarms(rows: unknown[], code: string, plantName: string
       severity: severity && Object.hasOwn(ALARM_SEVERITIES, severity) ? severity as AlarmSeverity : "unclassified",
       state: state === "active" || state === "cleared" ? state : "unknown",
       acknowledged: typeof raw.acknowledged === "boolean" ? raw.acknowledged : null,
-      name, description: sourceText(raw, "description"), occurredAt, clearedAt: sourceText(raw, "cleared_at", "clearedAt") }];
+      name, description: sourceText(raw, "description"),
+      repairSuggestion: sourceText(raw, "repair_suggestion", "repairSuggestion", "suggestion"),
+      occurredAt, clearedAt: sourceText(raw, "cleared_at", "clearedAt") }];
   });
 }
 

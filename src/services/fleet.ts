@@ -1,8 +1,7 @@
 import { getLocale } from "../i18n/language.ts";
-
-export const API_BASE = (
-  import.meta.env?.VITE_API_URL?.trim() || "http://127.0.0.1:8000"
-).replace(/\/+$/, "");
+import { request } from "./http.ts";
+export { API_BASE, ApiError, request } from "./http.ts";
+export type { ApiResponse } from "./http.ts";
 export type Numeric = number | string | null;
 export interface Plant {
   plant_code: string;
@@ -32,6 +31,11 @@ export interface Plant {
   country_name?: string | null;
   region?: string | null;
   city?: string | null;
+  grid_connected_on?: string | null;
+  device_types?: readonly string[] | null;
+  device_serial_numbers?: readonly string[] | null;
+  specific_energy_kwh_per_kwp?: Numeric;
+  performance_ratio_percent?: Numeric;
   image_url?: string | null;
   optimizer_quantity?: number | null;
   optimizer_quantity_complete?: boolean;
@@ -51,23 +55,6 @@ export interface Plant {
     field_quality?: Record<string, string>;
   };
 }
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  detail?: string;
-  configured?: boolean;
-  total?: number;
-  meta?: { is_partial?: boolean; warnings?: string[]; page?: number | null; total_pages?: number | null; snapshot_id?: string; generated_at?: string; date?: string | null; time_zone?: string | null };
-}
-export class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
 export function number(value: Numeric | undefined): number | null {
   if (
     value === null ||
@@ -78,35 +65,6 @@ export function number(value: Numeric | undefined): number | null {
     return null;
   const result = Number(value);
   return Number.isFinite(result) ? result : null;
-}
-export async function request<T>(
-  path: string,
-  signal?: AbortSignal,
-  options?: { method: "POST" | "PATCH"; body: unknown; token: string },
-): Promise<ApiResponse<T>> {
-  let response: Response;
-  try {
-    response = await fetch(API_BASE + path, {
-      ...(options ? {method: options.method, headers: {"Content-Type": "application/json", Authorization: `Bearer ${options.token}`}, body: JSON.stringify(options.body)} : {}),
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
-        : AbortSignal.timeout(15000),
-    });
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    throw new Error(
-      `Backend tidak dapat dihubungi di ${API_BASE}. Periksa koneksi dan izin CORS.`,
-    );
-  }
-  const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.success)
-    throw new ApiError(
-      typeof result?.detail === "string"
-        ? result.detail
-        : result?.message || `API error (${response.status})`,
-      response.status,
-    );
-  return result;
 }
 export async function getFleet(signal?: AbortSignal) {
   const [overview, metadata] = await Promise.allSettled([
@@ -134,7 +92,7 @@ export async function getFleet(signal?: AbortSignal) {
 }
 export type PlantStatus = "normal" | "faulty" | "disconnected" | "unknown";
 export function status(plant: Plant): PlantStatus {
-  const value = plant.status?.toLowerCase();
+  const value = typeof plant.status === "string" ? plant.status.trim().toLowerCase() : undefined;
   if (value === "normal" || value === "online") return "normal";
   if (value === "faulty" || value === "fault" || value === "alarm")
     return "faulty";

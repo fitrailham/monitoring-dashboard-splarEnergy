@@ -26,7 +26,7 @@ aktual. Tidak ada perubahan database atau request tulis ke backend dalam pemerik
 | --- | --- |
 | `GET /api/database/plants` | Master PLTS untuk Home dan pemilih PLTS Monitoring. Model sudah memuat koordinat, timezone, lokasi, foto, PV/ESS, kapasitas, optimizer, dan inventory. Verifikasi kelengkapan data sebenarnya. |
 | `GET /api/database/plants/{plant_code}` | Detail master PLTS. |
-| `POST /api/database/plants` | Pendaftaran PLTS sudah terdaftar. Form Add Plant frontend sudah terhubung, dengan token izin tulis hanya di memori selama form terbuka. |
+| `POST /api/database/plants` | Form Add Plant menggunakan sesi admin dan header `X-CSRF-Token`. |
 | `PATCH /api/database/plants/{plant_code}` | Perubahan master PLTS sudah terdaftar. Form Edit Plant Metadata sudah terhubung dengan allowlist field sesuai PatchPlant. |
 | `GET /api/database/overview` | Snapshot daya, energi, status, dan kualitas data. Query sudah mendukung search, lokasi, tipe perangkat/SN, status, pagination, serta sort. Frontend masih memakai seluruh daftar dan filtering lokal. |
 | `GET /api/portfolio/summary` | KPI portofolio, status PLTS, alarm, coverage, revenue, dan environmental benefits. Frontend sudah memakai summary untuk KPI, status, alarm, ESS, revenue dan manfaat lingkungan; alarm tidak lagi diminta per PLTS. |

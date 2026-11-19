@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { Plant } from "../services/fleet";
 import { format, number } from "../services/fleet";
 import { summaryMetric } from "../services/portfolio";
-import type { PortfolioSummary } from "../services/portfolio";
+import type { DashboardOverview } from "../services/portfolio";
 import { getPowerStatistics } from "../services/analytics";
 import { aggregateMetric, metricCoverageLabel, telemetryFreshness } from "../services/quality";
 import { calendarDate, validTimeZone } from "../services/calendar";
@@ -60,7 +60,7 @@ function MiniChart({ points, bars, unit }: { points: Point[]; bars?: boolean; un
 }
 
 export default function HomeOverview({ plants, alarms, summary, now, selected, onChange, onSelect, refreshKey }: {
-  plants: Plant[]; alarms: AlarmSummary; summary?: PortfolioSummary | null; now: number; selected: string;
+  plants: Plant[]; alarms: AlarmSummary; summary?: DashboardOverview | null; now: number; selected: string;
   onChange: (code: string) => void; onSelect: (plant: Plant) => void; refreshKey: number;
 }) {
   useLanguage();
@@ -94,7 +94,9 @@ export default function HomeOverview({ plants, alarms, summary, now, selected, o
   const matches = useMemo(() => plants.filter((item) => `${item.plant_name} ${item.plant_code} ${item.address ?? ""}`.toLowerCase().includes(query.trim().toLowerCase())), [plants, query, getLanguage()]);
   const power = summaryMetric(summary, "current_power_kw", aggregateMetric(plants, "pv_power_kw", now), "pv_power_kw");
   const total = summaryMetric(summary, "total_yield_kwh", aggregateMetric(plants, "total_yield_kwh", now));
-  const capacity = summaryMetric(summary, "installed_pv_capacity_kwp", aggregateMetric(plants, "capacity_kwp", now), "capacity_kwp");
+  const installedCapacity = aggregateMetric(plants, "capacity_kwp", now);
+  const capacity = summary?.kpis.installed_pv_capacity_kwp === undefined
+    ? installedCapacity : summaryMetric(summary, "installed_pv_capacity_kwp", installedCapacity, "capacity_kwp");
   const yieldToday = summaryMetric(summary, "yield_today_kwh", aggregateMetric(plants, "yield_today_kwh", now));
   const ranking = plants.flatMap((item) => {
     const metric = aggregateMetric([item], "total_yield_kwh", now);
@@ -104,7 +106,7 @@ export default function HomeOverview({ plants, alarms, summary, now, selected, o
   const monthlyValues = monthPoints.flatMap((point) => point.value === null ? [] : [point.value]);
   const monthTotal = monthlyValues.length ? monthlyValues.reduce((a, b) => a + b, 0) / 1000 : null;
   const alarmTotal = alarms.available ? alarms.counts.reduce((a, b) => a + b, 0) : null;
-  const alarmColors = ["#ff4b61", "#ff932c", "#ffd341", "#b78aff", "#7792ac"];
+  const alarmColors = ["#ff4b61", "#ff932c", "#ffd341", "#48b0f6", "#7792ac"];
   const sectors = alarms.counts.map((count, index) => {
     const start = alarmTotal ? alarms.counts.slice(0, index).reduce((a, b) => a + b, 0) / alarmTotal * 360 : 0;
     const end = start + (alarmTotal ? count / alarmTotal * 360 : 0);

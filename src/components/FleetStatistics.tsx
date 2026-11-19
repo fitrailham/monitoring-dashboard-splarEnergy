@@ -9,7 +9,7 @@ import { calendarDate, validTimeZone } from "../services/calendar";
 import { getYieldStatistics } from "../services/yieldStatistics";
 import type { YieldResult } from "../services/yieldStatistics";
 import { getRankings } from "../services/portfolio";
-import type { PortfolioSummary, Ranking } from "../services/portfolio";
+import type { DashboardOverview, Ranking } from "../services/portfolio";
 import Icon from "./Icon";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import { DashboardBarChart } from "./AgDashboardChart";
@@ -247,7 +247,7 @@ export default function FleetStatistics({
   selected: string;
   onChange: (code: string) => void;
   refreshKey?: number;
-  summary?: PortfolioSummary | null;
+  summary?: DashboardOverview | null;
 }) {
   useLanguage();
   const timeZone = validTimeZone(plants.find((plant) => plant.plant_code === selected)?.time_zone);

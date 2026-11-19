@@ -29,10 +29,12 @@ test("ranking sends an explicit date and timezone and does not replace an empty 
   assert.deepEqual((await getRankings("2026-11-12","Asia/Makassar")).rows,[]);
 });
 const form={code:"P/1",name:"Plant",capacity:"10.5",zone:"Asia/Makassar",country:"id",region:"",city:"",address:"Example",latitude:"0",longitude:"100"};
-test("plant registration sends bearer token only as a header and preserves zero coordinates",async(t)=>{
+test("plant registration uses the browser session and CSRF header and preserves zero coordinates",async(t)=>{
   mock(t,(url,init)=>{
     assert.equal(url.pathname,"/api/database/plants");assert.equal(init.method,"POST");
-    assert.equal(init.headers.Authorization,"Bearer test-token");
+    assert.equal(init.credentials,"include");
+    assert.equal(init.headers["X-CSRF-Token"],"test-token");
+    assert.equal(init.headers.Authorization,undefined);
     const body=JSON.parse(init.body);assert.equal(body.latitude,0);assert.equal(body.country_code,"ID");
     assert.equal(body.plant_code,"P/1");assert.equal(body.capacity_kwp,10.5);assert.equal(body.token,undefined);
     assert.equal(url.search," ".trim());return{success:true,data:{plant_code:"P/1"}};
@@ -42,6 +44,7 @@ test("plant registration sends bearer token only as a header and preserves zero 
 test("metadata patch sends only fields allowed by backend and never sends telemetry or a name rename",async(t)=>{
   mock(t,(url,init)=>{
     assert.equal(decodeURIComponent(url.pathname),"/api/database/plants/P/1");assert.equal(init.method,"PATCH");
+    assert.equal(init.credentials,"include");assert.equal(init.headers["X-CSRF-Token"],"test-token");
     const body=JSON.parse(init.body);assert.equal(body.plant_code,undefined);assert.equal(body.plant_name,undefined);
     assert.equal(body.address,undefined);assert.equal(body.pv_power_kw,undefined);return{success:true,data:{}};
   });
